@@ -1,6 +1,6 @@
 /* GraphCanvas 组件样式 */
 
-/* 面包屑 + 里程碑顶部栏 */
+/* 顶部导航栏 */
 .canvas-top-bar {
   display: flex;
   align-items: center;
@@ -12,7 +12,7 @@
   gap: 16px;
 }
 
-/* 面包屑导航 */
+/* 面包屑 */
 .breadcrumbs {
   display: flex;
   align-items: center;
@@ -20,12 +20,12 @@
   flex-shrink: 0;
 }
 
-.breadcrumb-sep {
-  margin: 0 6px;
+.bc-sep {
+  margin: 0 2px;
   color: #ccc;
 }
 
-.breadcrumb-item {
+.bc-item {
   color: #3498DB;
   cursor: pointer;
   padding: 2px 6px;
@@ -33,37 +33,36 @@
   transition: background 0.15s;
 }
 
-.breadcrumb-item:hover {
+.bc-item:hover {
   background: #EBF5FB;
 }
 
-.breadcrumb-item.active {
+.bc-item.active {
   color: #2C3E50;
   font-weight: 600;
   cursor: default;
 }
 
-.breadcrumb-item.active:hover {
+.bc-item.active:hover {
   background: transparent;
 }
 
-/* 里程碑标记 */
+/* 里程碑标签 */
 .milestone-tags {
   display: flex;
   align-items: center;
   gap: 8px;
   overflow-x: auto;
-  flex-shrink: 1;
 }
 
 .milestone-tag {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 10px;
+  padding: 4px 12px;
   background: #F8F9FA;
   border: 1px solid #E8E8E8;
-  border-radius: 12px;
+  border-radius: 14px;
   font-size: 12px;
   color: #2C3E50;
   cursor: pointer;
@@ -82,18 +81,18 @@
   margin-left: 2px;
 }
 
-/* 层级提示 */
-.level-hint {
+/* 缩放提示 */
+.zoom-hint {
   position: absolute;
   bottom: 16px;
   left: 50%;
   transform: translateX(-50%);
-  padding: 6px 16px;
-  background: rgba(44, 62, 80, 0.8);
+  padding: 5px 14px;
+  background: rgba(44, 62, 80, 0.75);
   color: #fff;
-  font-size: 12px;
-  border-radius: 16px;
+  font-size: 11px;
+  border-radius: 14px;
   z-index: 10;
   pointer-events: none;
-  opacity: 0.7;
+  opacity: 0.6;
 }
