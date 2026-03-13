@@ -21,11 +21,21 @@ import {
   type DependencyCreate,
 } from '../services/api';
 
+/** 面包屑条目 */
+interface BreadcrumbItem {
+  id: string | null; // null = 顶层
+  title: string;
+}
+
 interface GraphStore {
   // 数据
   graphData: GraphData | null;
   loading: boolean;
   error: string | null;
+
+  // 层级导航
+  currentParentId: string | null; // null = 顶层视图
+  breadcrumbs: BreadcrumbItem[];
 
   // 选中状态
   selectedNodeId: string | null;
@@ -58,7 +68,13 @@ interface GraphStore {
   savePosition: (id: string, x: number, y: number) => Promise<void>;
   addChildrenBatch: (parentId: string, titles: string[], assignee?: string) => Promise<void>;
 
-  // 获取选中节点的数据
+  // 层级导航方法
+  drillDown: (taskId: string) => void;  // 双击进入子任务视图
+  goUp: () => void;                      // 返回上一层
+  goToLevel: (index: number) => void;    // 面包屑跳转到指定层
+
+  // 获取当前层级的节点
+  getCurrentLevelNodes: () => GraphNode[];
   getSelectedNode: () => GraphNode | GraphMilestone | null;
 }
 
@@ -66,6 +82,8 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
   graphData: null,
   loading: false,
   error: null,
+  currentParentId: null,
+  breadcrumbs: [{ id: null, title: '全部任务' }],
   selectedNodeId: null,
   selectedNodeType: null,
   drawerVisible: false,
@@ -102,7 +120,12 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
   },
 
   addTask: async (data) => {
-    await createTask(data);
+    // 如果在子层级中创建任务，自动设置 parent_id
+    const { currentParentId } = get();
+    const taskData = currentParentId
+      ? { ...data, parent_id: currentParentId }
+      : data;
+    await createTask(taskData);
     await get().loadGraphData();
   },
 
@@ -141,6 +164,64 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
   addChildrenBatch: async (parentId, titles, assignee?) => {
     await batchCreateChildren(parentId, titles, assignee);
     await get().loadGraphData();
+  },
+
+  // ===== 层级导航 =====
+
+  drillDown: (taskId) => {
+    const { graphData, breadcrumbs } = get();
+    if (!graphData) return;
+
+    const task = graphData.nodes.find(n => n.id === taskId);
+    if (!task) return;
+
+    // 检查此任务是否有子任务
+    const children = graphData.nodes.filter(n => n.parent_id === taskId);
+    if (children.length === 0) return; // 叶子节点不能展开
+
+    set({
+      currentParentId: taskId,
+      breadcrumbs: [...breadcrumbs, { id: taskId, title: task.title }],
+    });
+  },
+
+  goUp: () => {
+    const { breadcrumbs } = get();
+    if (breadcrumbs.length <= 1) return;
+
+    const newBreadcrumbs = breadcrumbs.slice(0, -1);
+    const parentLevel = newBreadcrumbs[newBreadcrumbs.length - 1];
+
+    set({
+      currentParentId: parentLevel.id,
+      breadcrumbs: newBreadcrumbs,
+    });
+  },
+
+  goToLevel: (index) => {
+    const { breadcrumbs } = get();
+    if (index < 0 || index >= breadcrumbs.length) return;
+
+    const newBreadcrumbs = breadcrumbs.slice(0, index + 1);
+    const targetLevel = newBreadcrumbs[newBreadcrumbs.length - 1];
+
+    set({
+      currentParentId: targetLevel.id,
+      breadcrumbs: newBreadcrumbs,
+    });
+  },
+
+  // 获取当前层级的节点（只返回 parent_id 匹配的直接子节点）
+  getCurrentLevelNodes: () => {
+    const { graphData, currentParentId } = get();
+    if (!graphData) return [];
+
+    return graphData.nodes.filter(n => {
+      if (currentParentId === null) {
+        return !n.parent_id; // 顶层：没有 parent 的任务
+      }
+      return n.parent_id === currentParentId; // 子层级：parent_id 匹配
+    });
   },
 
   getSelectedNode: () => {

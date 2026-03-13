@@ -1,0 +1,99 @@
+/* GraphCanvas 组件样式 */
+
+/* 面包屑 + 里程碑顶部栏 */
+.canvas-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: #fff;
+  border-bottom: 1px solid #eee;
+  min-height: 40px;
+  gap: 16px;
+}
+
+/* 面包屑导航 */
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.breadcrumb-sep {
+  margin: 0 6px;
+  color: #ccc;
+}
+
+.breadcrumb-item {
+  color: #3498DB;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+.breadcrumb-item:hover {
+  background: #EBF5FB;
+}
+
+.breadcrumb-item.active {
+  color: #2C3E50;
+  font-weight: 600;
+  cursor: default;
+}
+
+.breadcrumb-item.active:hover {
+  background: transparent;
+}
+
+/* 里程碑标记 */
+.milestone-tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  flex-shrink: 1;
+}
+
+.milestone-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  background: #F8F9FA;
+  border: 1px solid #E8E8E8;
+  border-radius: 12px;
+  font-size: 12px;
+  color: #2C3E50;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+
+.milestone-tag:hover {
+  background: #EBF5FB;
+  border-color: #3498DB;
+}
+
+.milestone-pct {
+  color: #3498DB;
+  font-weight: 600;
+  margin-left: 2px;
+}
+
+/* 层级提示 */
+.level-hint {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 16px;
+  background: rgba(44, 62, 80, 0.8);
+  color: #fff;
+  font-size: 12px;
+  border-radius: 16px;
+  z-index: 10;
+  pointer-events: none;
+  opacity: 0.7;
+}
