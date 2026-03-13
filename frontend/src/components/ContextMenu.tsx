@@ -3,6 +3,7 @@
  */
 import { useEffect, useRef } from 'react';
 import { useGraphStore } from '../stores/graphStore';
+import { deleteMilestone } from '../services/api';
 import './ContextMenu.css';
 
 export default function ContextMenu() {
@@ -14,9 +15,10 @@ export default function ContextMenu() {
     addMilestone,
     removeTask,
     selectNode,
+    graphData,
+    loadGraphData,
   } = useGraphStore();
 
-  // 点击其他区域关闭菜单
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
@@ -32,6 +34,11 @@ export default function ContextMenu() {
   if (!contextMenu.visible) return null;
 
   const { x, y, nodeId, nodeType, canvasX, canvasY } = contextMenu;
+
+  // 检查节点是否有子任务
+  const hasChildren = nodeId && nodeType === 'task' && graphData
+    ? graphData.nodes.some(n => n.parent_id === nodeId)
+    : false;
 
   // 在空白区域右键
   if (!nodeId) {
@@ -95,6 +102,21 @@ export default function ContextMenu() {
           >
             ➕ 新建子任务
           </div>
+
+          {/* ★ 进入子任务层级 */}
+          {hasChildren && (
+            <div
+              className="context-menu-item"
+              onClick={() => {
+                // 通过 window 事件通知 GraphCanvas 进行层级切换
+                window.dispatchEvent(new CustomEvent('drillInto', { detail: nodeId }));
+                hideContextMenu();
+              }}
+            >
+              🔍 进入子任务
+            </div>
+          )}
+
           <div className="context-menu-divider" />
           <div
             className="context-menu-item context-menu-item--danger"
@@ -106,6 +128,29 @@ export default function ContextMenu() {
             }}
           >
             🗑️ 删除任务
+          </div>
+        </>
+      )}
+
+      {/* ★ 里程碑右键删除 */}
+      {nodeType === 'milestone' && (
+        <>
+          <div className="context-menu-divider" />
+          <div
+            className="context-menu-item context-menu-item--danger"
+            onClick={async () => {
+              if (window.confirm('确定删除此里程碑？')) {
+                try {
+                  await deleteMilestone(nodeId);
+                  await loadGraphData();
+                } catch {
+                  // ignore
+                }
+              }
+              hideContextMenu();
+            }}
+          >
+            🗑️ 删除里程碑
           </div>
         </>
       )}
