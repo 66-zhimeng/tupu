@@ -1,0 +1,36 @@
+/* 全局应用样式 */
+
+.app-container {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #FAFBFC;
+}
+
+.app-main {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+/* 全局 antd 覆写 */
+.ant-drawer .ant-drawer-header {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.ant-drawer .ant-drawer-body {
+  overflow-y: auto;
+}
+
+/* 加载动画 */
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.7);
+  z-index: 50;
+}
