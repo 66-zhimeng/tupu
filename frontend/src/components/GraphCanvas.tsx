@@ -1,7 +1,12 @@
 /**
  * 图谱画布组件 - AntV G6 力导向图
+ *
+ * 修复：
+ * - 显示所有节点（包括子任务），用父子连线表达层级
+ * - 里程碑不再是独立节点，改为 X 轴背景标签
+ * - 缩放和拖拽正常工作
  */
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef } from 'react';
 import { Graph } from '@antv/g6';
 import { useGraphStore } from '../stores/graphStore';
 import { getAssigneeColor } from '../utils/colors';
@@ -9,13 +14,13 @@ import type { GraphNode, GraphMilestone } from '../services/api';
 
 /** 根据工时计算节点半径 */
 function getNodeSize(hours: number): number {
-  const minSize = 30;
-  const maxSize = 120;
+  const minSize = 32;
+  const maxSize = 100;
   if (!hours || hours <= 0) return minSize;
-  return Math.min(maxSize, minSize + Math.sqrt(hours) * 8);
+  return Math.min(maxSize, minSize + Math.sqrt(hours) * 6);
 }
 
-/** 构建 G6 数据 */
+/** 构建 G6 数据：显示所有任务 + 父子连线 + 依赖关系 */
 function buildG6Data(
   graphData: ReturnType<typeof useGraphStore.getState>['graphData'],
 ) {
@@ -23,50 +28,39 @@ function buildG6Data(
 
   const assignees = graphData.assignees;
 
-  // 任务节点
-  const taskNodes = graphData.nodes
-    .filter(n => !n.parent_id) // MVP 只显示顶层节点
-    .map((node: GraphNode) => {
-      const size = getNodeSize(node.computed_hours);
-      const color = node.assignee
-        ? getAssigneeColor(node.assignee, assignees)
-        : '#7F8C8D';
-      const progress = node.computed_progress / 100;
+  // 所有任务节点（不再过滤子任务）
+  const taskNodes = graphData.nodes.map((node: GraphNode) => {
+    const size = getNodeSize(node.computed_hours);
+    const color = node.assignee
+      ? getAssigneeColor(node.assignee, assignees)
+      : '#95A5A6';
+    const progress = node.computed_progress / 100;
+    const isLeaf = node.is_leaf;
+    const hasParent = !!node.parent_id;
 
-      return {
-        id: node.id,
-        data: {
-          ...node,
-          size,
-          color,
-          progress,
-          label: node.title,
-          type: 'task' as const,
-        },
-      };
-    });
+    return {
+      id: node.id,
+      data: {
+        ...node,
+        size: hasParent ? Math.max(size * 0.75, 28) : size, // 子节点稍小
+        color,
+        progress,
+        label: node.title,
+        type: 'task' as const,
+        isLeaf,
+        hasParent,
+      },
+    };
+  });
 
-  // 里程碑节点
-  const milestoneNodes = graphData.milestones.map((ms: GraphMilestone) => ({
-    id: ms.id,
-    data: {
-      ...ms,
-      size: 50,
-      color: '#2C3E50',
-      progress: ms.computed_progress / 100,
-      label: ms.title,
-      type: 'milestone' as const,
-    },
-  }));
-
-  // 归属关系边（任务 → 里程碑，虚线）
-  const belongEdges = graphData.nodes
-    .filter(n => n.milestone_id && !n.parent_id)
+  // 父子关系边（蓝灰色虚线，无箭头）
+  const parentChildEdges = graphData.nodes
+    .filter(n => n.parent_id)
     .map(n => ({
-      id: `belong-${n.id}`,
-      source: n.id,
-      target: n.milestone_id!,
-      data: { edgeType: 'belong' },
+      id: `parent-${n.id}`,
+      source: n.parent_id!,
+      target: n.id,
+      data: { edgeType: 'parent-child' },
     }));
 
   // 依赖关系边
@@ -82,16 +76,22 @@ function buildG6Data(
   }));
 
   return {
-    nodes: [...taskNodes, ...milestoneNodes],
-    edges: [...depEdges, ...belongEdges],
+    nodes: taskNodes,
+    edges: [...parentChildEdges, ...depEdges],
   };
 }
 
 export default function GraphCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<Graph | null>(null);
-  const { graphData, loadGraphData, selectNode, showContextMenu, hideContextMenu, savePosition } =
-    useGraphStore();
+  const {
+    graphData,
+    loadGraphData,
+    selectNode,
+    showContextMenu,
+    hideContextMenu,
+    savePosition,
+  } = useGraphStore();
 
   // 初始化加载
   useEffect(() => {
@@ -105,20 +105,29 @@ export default function GraphCanvas() {
     const graph = new Graph({
       container: containerRef.current,
       autoFit: 'view',
+      padding: [40, 40, 40, 40],
       animation: true,
       layout: {
         type: 'd3-force',
         preventOverlap: true,
-        nodeStrength: -800,
-        edgeStrength: 0.3,
+        nodeStrength: -600,
+        edgeStrength: 0.4,
         collide: {
           strength: 0.8,
-          radius: (d: any) => (d.data?.size || 30) / 2 + 10,
+          radius: (d: any) => (d.data?.size || 30) / 2 + 15,
+        },
+        link: {
+          distance: (edge: any) => {
+            // 父子关系边更短，使子节点围绕父节点
+            if (edge.data?.edgeType === 'parent-child') return 80;
+            return 200;
+          },
         },
       },
       behaviors: [
         'drag-canvas',
         'zoom-canvas',
+        'scroll-canvas',
         {
           type: 'drag-element',
           key: 'drag-node',
@@ -128,25 +137,27 @@ export default function GraphCanvas() {
         style: {
           size: (d: any) => d.data?.size || 30,
           fill: (d: any) => {
-            if (d.data?.type === 'milestone') return '#2C3E50';
-            if (d.data?.status === '已取消') return '#BDC3C7';
+            if (d.data?.status === '已取消') return '#D5DBDB';
+            if (d.data?.status === '已完成') return d.data?.color || '#2ECC71';
             const progress = d.data?.progress || 0;
-            const color = d.data?.color || '#7F8C8D';
-            if (progress >= 1) return color;
             if (progress <= 0) return '#ECF0F1';
-            return color; // G6 will handle via palette
+            return d.data?.color || '#95A5A6';
           },
           stroke: (d: any) => {
-            if (d.data?.type === 'milestone') return '#1A252F';
-            // 逾期检测
+            // 逾期红色边框
             if (d.data?.due_date && d.data?.status === '未完成') {
               const now = new Date();
               const due = new Date(d.data.due_date);
               if (now > due) return '#E74C3C';
             }
+            // 父节点加深边框
+            if (!d.data?.isLeaf && !d.data?.hasParent) return d.data?.color || '#7F8C8D';
             return d.data?.color || '#BDC3C7';
           },
           lineWidth: (d: any) => {
+            // 父节点粗边框
+            if (!d.data?.isLeaf && !d.data?.hasParent) return 2.5;
+            // 逾期
             if (d.data?.due_date && d.data?.status === '未完成') {
               const now = new Date();
               const due = new Date(d.data.due_date);
@@ -162,32 +173,55 @@ export default function GraphCanvas() {
             }
             return undefined;
           },
-          opacity: (d: any) => (d.data?.status === '已取消' ? 0.4 : 1),
+          opacity: (d: any) => (d.data?.status === '已取消' ? 0.35 : 1),
           labelText: (d: any) => {
             const label = d.data?.label || '';
-            return label.length > 8 ? label.slice(0, 8) + '...' : label;
+            return label.length > 10 ? label.slice(0, 10) + '…' : label;
           },
           labelFill: '#333',
-          labelFontSize: 12,
+          labelFontSize: (d: any) => (d.data?.hasParent ? 11 : 13),
           labelPlacement: 'bottom',
           labelOffsetY: 8,
+          // 进度环效果：用 badge 显示进度百分比
+          badge: true,
+          badges: (d: any) => {
+            const progress = d.data?.computed_progress;
+            if (progress === undefined || progress === null) return [];
+            if (progress <= 0) return [];
+            return [
+              {
+                text: `${Math.round(progress)}%`,
+                placement: 'right-top',
+                fill: progress >= 100 ? '#27AE60' : '#3498DB',
+                fontSize: 9,
+                backgroundFill: '#fff',
+                backgroundStroke: progress >= 100 ? '#27AE60' : '#3498DB',
+                backgroundRadius: 6,
+                backgroundLineWidth: 1,
+              },
+            ];
+          },
         },
       },
       edge: {
         style: {
           stroke: (d: any) => {
+            if (d.data?.edgeType === 'parent-child') return '#BDC3C7';
             if (d.data?.edgeType === 'iterative') return '#F39C12';
-            if (d.data?.edgeType === 'belong') return '#BDC3C7';
-            return '#95A5A6';
+            return '#7F8C8D';
           },
-          lineWidth: (d: any) => (d.data?.edgeType === 'iterative' ? 2 : 1),
+          lineWidth: (d: any) => {
+            if (d.data?.edgeType === 'parent-child') return 1;
+            if (d.data?.edgeType === 'iterative') return 2;
+            return 1.5;
+          },
           lineDash: (d: any) => {
+            if (d.data?.edgeType === 'parent-child') return [4, 4];
             if (d.data?.edgeType === 'iterative') return [6, 4];
-            if (d.data?.edgeType === 'belong') return [3, 3];
             return undefined;
           },
-          opacity: 0.4,
-          endArrow: (d: any) => d.data?.edgeType !== 'belong',
+          opacity: (d: any) => (d.data?.edgeType === 'parent-child' ? 0.5 : 0.6),
+          endArrow: (d: any) => d.data?.edgeType !== 'parent-child',
           labelText: (d: any) => {
             if (d.data?.edgeType === 'iterative' && d.data?.iterationCount > 0) {
               return `×${d.data.iterationCount}`;
@@ -274,15 +308,42 @@ export default function GraphCanvas() {
     graph.render();
   }, [graphData]);
 
+  // 里程碑标签（X 轴标记，不是独立节点）
+  const milestones = graphData?.milestones || [];
+
   return (
-    <div
-      ref={containerRef}
-      id="graph-canvas"
-      style={{
-        width: '100%',
-        height: '100%',
-        background: '#FAFBFC',
-      }}
-    />
+    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+      {/* 里程碑 X 轴标记 */}
+      {milestones.length > 0 && (
+        <div className="milestone-bar">
+          {milestones.map((ms: GraphMilestone, index: number) => (
+            <div
+              key={ms.id}
+              className="milestone-marker"
+              onClick={() => selectNode(ms.id, 'milestone')}
+              title={ms.description || ms.title}
+            >
+              <span className="milestone-diamond">◆</span>
+              <span className="milestone-label">{ms.title}</span>
+              {ms.computed_progress > 0 && (
+                <span className="milestone-progress">
+                  {Math.round(ms.computed_progress)}%
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div
+        ref={containerRef}
+        id="graph-canvas"
+        style={{
+          width: '100%',
+          height: milestones.length > 0 ? 'calc(100% - 36px)' : '100%',
+          background: '#FAFBFC',
+        }}
+      />
+    </div>
   );
 }
