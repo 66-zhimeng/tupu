@@ -249,40 +249,39 @@ export default function GraphCanvas() {
       if (nd?.style) savePosition(id, (nd.style as any).x || 0, (nd.style as any).y || 0);
     });
 
-    // ★ 监听缩放 → 自动层级切换
+    // ★ 监听缩放 → 自动层级切换（带冷却防连锁）
     let zoomCheckTimer: ReturnType<typeof setTimeout> | null = null;
+    let cooldown = false; // 冷却标记，防止连续切换
+
     const checkZoomLevel = () => {
-      if (!graphRef.current) return;
+      if (!graphRef.current || cooldown) return;
       const zoom = graphRef.current.getZoom();
 
       if (zoom > ZOOM_IN_THRESHOLD) {
-        // 找到视口中心最近的有子任务的节点，钻入
         const allNodeData = graphRef.current.getNodeData();
         const parentNodes = allNodeData.filter(n => n.data?.hasChildren);
         if (parentNodes.length > 0) {
-          // 钻入第一个有子任务的父节点
+          cooldown = true; // 开始冷却
           const target = parentNodes[0];
           drillInto(target.id as string);
-          // 重置缩放
+          // 重置缩放 + 冷却 2 秒
           setTimeout(() => {
-            if (graphRef.current) {
-              graphRef.current.zoomTo(1, true);
-            }
-          }, 200);
+            if (graphRef.current) graphRef.current.zoomTo(1, false);
+          }, 300);
+          setTimeout(() => { cooldown = false; }, 2000);
         }
       } else if (zoom < ZOOM_OUT_THRESHOLD) {
-        // 缩小 → 返回上层
+        cooldown = true; // 开始冷却
         goUp();
         setTimeout(() => {
-          if (graphRef.current) {
-            graphRef.current.zoomTo(1, true);
-          }
-        }, 200);
+          if (graphRef.current) graphRef.current.zoomTo(1, false);
+        }, 300);
+        setTimeout(() => { cooldown = false; }, 2000);
       }
     };
 
     // 轮询检测缩放级别
-    zoomCheckTimer = setInterval(checkZoomLevel, 500);
+    zoomCheckTimer = setInterval(checkZoomLevel, 300);
 
     return () => {
       if (zoomCheckTimer) clearInterval(zoomCheckTimer);
