@@ -244,19 +244,12 @@ export default function GraphCanvas() {
       }, 300);
     });
 
-    // Combo 单击也可编辑
-    graph.on('combo:click', (evt: any) => {
-      const id = evt.target?.id;
-      if (!id) return;
-      if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
-      clickTimerRef.current = setTimeout(() => {
-        selectNode(id, 'task');
-        clickTimerRef.current = null;
-      }, 300);
-    });
 
-    // 双击 combo → collapse-expand 自动处理
+    // Combo: 双击由 collapse-expand behavior 自动处理
+    // 单击 combo 不做任何操作（避免干扰双击展开/收起）
+    // 如需编辑父任务 → 右键菜单选「编辑」
     graph.on('combo:dblclick', () => {
+      // 取消可能的单击定时器
       if (clickTimerRef.current) {
         clearTimeout(clickTimerRef.current);
         clickTimerRef.current = null;
