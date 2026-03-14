@@ -71,13 +71,12 @@ function buildG6Data(
       return r;
     }
 
-    // 父节点：半径 = 能容纳所有子节点的最小圆
+    // 父节点：半径 = 能容纳所有子节点的最小圆（宽裕留白）
     const childRadii = children.map(c => computeRadius(c.id));
-    // 简单公式：所有子圆面积之和 → 父圆面积 + 间距
     const totalChildArea = childRadii.reduce((sum, r) => sum + Math.PI * r * r, 0);
-    const baseR = Math.sqrt(totalChildArea / Math.PI) * 1.6 + 20; // 1.6 缩放 + 20px padding
-    const minR = Math.max(...childRadii) + 25; // 至少能放下最大子节点
-    const r = Math.max(baseR, minR, 40);
+    const baseR = Math.sqrt(totalChildArea / Math.PI) * 2.0 + 30; // 2x 缩放 + 30px 留白
+    const minR = Math.max(...childRadii) * 2 + 30; // 至少放下最大子节点 + 间距
+    const r = Math.max(baseR, minR, 50);
     radiusMap.set(nodeId, r);
     return r;
   }
@@ -96,13 +95,14 @@ function buildG6Data(
     if (children.length === 1) {
       relPosMap.set(children[0].id, { dx: 0, dy: 0 });
     } else {
-      // 在父圆内部按同心圆排列子节点
-      const placeR = parentR * 0.55; // 子节点排列的轨道半径
+      // 在父圆内部按同心圆排列子节点（轨道在父圆半径 40% 处）
+      const maxChildR = Math.max(...children.map(c => radiusMap.get(c.id) || 30));
+      const placeR = Math.min(parentR * 0.4, parentR - maxChildR - 5);
       children.forEach((child, i) => {
         const angle = (2 * Math.PI * i) / children.length - Math.PI / 2;
         relPosMap.set(child.id, {
-          dx: Math.cos(angle) * placeR,
-          dy: Math.sin(angle) * placeR,
+          dx: Math.cos(angle) * Math.max(placeR, 0),
+          dy: Math.sin(angle) * Math.max(placeR, 0),
         });
       });
     }
