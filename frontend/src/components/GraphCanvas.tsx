@@ -412,24 +412,8 @@ export default function GraphCanvas() {
       }, 250);
     });
 
-    graph.on('combo:dblclick', () => {
-      if (clickTimerRef.current) {
-        clearTimeout(clickTimerRef.current);
-        clickTimerRef.current = null;
-      }
-    });
-
     // 右键菜单
     graph.on('node:contextmenu', (evt: any) => {
-      const e = evt.originalEvent || evt;
-      if (e?.preventDefault) e.preventDefault();
-      if (e?.stopPropagation) e.stopPropagation();
-      const id = evt.target?.id;
-      if (!id) return;
-      showContextMenu(e?.clientX || 0, e?.clientY || 0, evt.canvas?.x || 0, evt.canvas?.y || 0, id, 'task');
-    });
-
-    graph.on('combo:contextmenu', (evt: any) => {
       const e = evt.originalEvent || evt;
       if (e?.preventDefault) e.preventDefault();
       if (e?.stopPropagation) e.stopPropagation();
@@ -446,6 +430,39 @@ export default function GraphCanvas() {
     });
 
     graph.on('canvas:click', () => hideContextMenu());
+
+    // ★ 拖拽约束：子节点不能超出父圆边界
+    graph.on('node:drag', (evt: any) => {
+      const id = evt.target?.id;
+      if (!id) return;
+      const nd = graph.getNodeData(id);
+      if (!nd?.data?.parent_id) return; // 顶层节点不约束
+
+      const parentId = nd.data.parent_id as string;
+      const parentNd = graph.getNodeData(parentId);
+      if (!parentNd?.style) return;
+
+      const px = (parentNd.style as any).x || 0;
+      const py = (parentNd.style as any).y || 0;
+      const parentR = Number(parentNd.data?.nodeRadius) || 60;
+      const childR = Number(nd.data?.nodeRadius) || 30;
+
+      const cx = (nd.style as any).x || 0;
+      const cy = (nd.style as any).y || 0;
+      const dx = cx - px;
+      const dy = cy - py;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const maxDist = parentR - childR - 5; // 子圆边缘不超出父圆边缘
+
+      if (dist > maxDist && maxDist > 0) {
+        // 约束回父圆边界
+        const scale = maxDist / dist;
+        graph.updateNodeData([{
+          id,
+          style: { x: px + dx * scale, y: py + dy * scale },
+        }]);
+      }
+    });
 
     // 拖拽保存位置
     graph.on('node:dragend', (evt: any) => {
