@@ -31,16 +31,11 @@ function progressColor(pct: number, status: string): string {
   return `rgb(${Math.round(59 - t * 43)},${Math.round(130 + t * 55)},${Math.round(246 - t * 115)})`;
 }
 
-/** 节点尺寸（宽度） */
-function nodeWidth(hours: number): number {
-  const min = 140, max = 220;
+/** 节点圆圈半径 */
+function nodeRadius(hours: number): number {
+  const min = 30, max = 50;
   if (!hours || hours <= 0) return min;
-  return Math.min(max, min + Math.sqrt(hours) * 10);
-}
-
-/** 节点高度 */
-function nodeHeight(_hours: number): number {
-  return 52;
+  return Math.min(max, min + Math.sqrt(hours) * 3);
 }
 
 /* ===== 构建 G6 数据 ===== */
@@ -90,28 +85,22 @@ function buildG6Data(
     .filter(n => !comboIds.has(n.id))
     .map((node: GraphNode) => {
       const color = progressColor(node.computed_progress, node.status);
-      const title = node.title.length > 10 ? node.title.slice(0, 10) + '…' : node.title;
-
-      const parts: string[] = [title];
-      if (node.assignee) parts.push(node.assignee);
-      if (node.computed_hours > 0) parts.push(`${node.computed_hours.toFixed(0)}h`);
+      const title = node.title.length > 8 ? node.title.slice(0, 8) + '…' : node.title;
 
       const comboId = node.parent_id && comboIds.has(node.parent_id)
         ? node.parent_id
         : undefined;
 
-      const w = nodeWidth(node.computed_hours || node.estimated_hours);
-      const h = nodeHeight(node.computed_hours || node.estimated_hours);
+      const r = nodeRadius(node.computed_hours || node.estimated_hours);
 
       return {
         id: node.id,
         combo: comboId,
         data: {
           ...node,
-          nodeWidth: w,
-          nodeHeight: h,
+          nodeRadius: r,
           progressColor: color,
-          label: parts.join('\n'),
+          label: title,
         },
       };
     });
@@ -160,12 +149,12 @@ export default function GraphCanvas() {
       padding: [60, 60, 60, 60],
       animation: true,
 
-      // 布局 — combo-combined: 默认内部 Concentric + 外部 gForce（含 Combo 碰撞）
+      // 布局 — combo-combined: 内部 Concentric + 外部 gForce（含 Combo 碰撞）
       layout: {
         type: 'combo-combined',
         comboPadding: 5,
-        spacing: 50,
-        nodeSize: 160,
+        spacing: 20,
+        nodeSize: 80,
       },
 
       // 交互
@@ -185,12 +174,12 @@ export default function GraphCanvas() {
           state: 'highlight',
           inactiveState: 'dim',
         },
-        // ★ 拖拽创建边
+        // ★ 点击创建边（click 模式：先点源节点，再点目标节点）
         {
           type: 'create-edge',
           key: 'create-edge',
-          trigger: 'drag',
-          enable: false, // 默认关闭，通过 toggleConnect() 开启
+          trigger: 'click',
+          enable: false,
           style: {
             stroke: '#3B82F6',
             lineWidth: 2,
@@ -227,37 +216,36 @@ export default function GraphCanvas() {
         },
       ],
 
-      // 节点样式 — 矩形卡片
+      // 节点样式 — 圆形
       node: {
-        type: 'rect',
+        type: 'circle',
         style: {
-          size: (d: any) => [d.data?.nodeWidth || 140, d.data?.nodeHeight || 52],
-          fill: '#FFFFFF',
+          size: (d: any) => (d.data?.nodeRadius || 30) * 2,
+          fill: (d: any) => {
+            const color = d.data?.progressColor || '#94A3B8';
+            // 使用进度颜色作为填充（低透明度）
+            return color;
+          },
+          fillOpacity: 0.12,
           stroke: (d: any) => {
-            // 逾期红色边框
             if (d.data?.due_date && d.data?.status === '未完成') {
               if (new Date() > new Date(d.data.due_date)) return '#EF4444';
             }
             return d.data?.progressColor || '#E2E8F0';
           },
-          lineWidth: 2,
-          radius: 10,
+          lineWidth: 2.5,
           opacity: (d: any) => (d.data?.status === '已取消' ? 0.4 : 1),
-          shadowColor: 'rgba(0, 0, 0, 0.06)',
-          shadowBlur: 8,
+          shadowColor: 'rgba(0, 0, 0, 0.08)',
+          shadowBlur: 6,
           shadowOffsetY: 2,
 
           // 标签
           labelText: (d: any) => d.data?.label || '',
           labelFill: '#1E293B',
-          labelFontSize: 12,
+          labelFontSize: 11,
           labelFontWeight: 600,
           labelPlacement: 'center',
-          labelLineHeight: 16,
           labelFontFamily: "'Inter', sans-serif",
-
-          // 左侧进度色条
-          badgeFill: (d: any) => d.data?.progressColor || '#94A3B8',
 
           // 连接端口
           port: true,
@@ -268,16 +256,15 @@ export default function GraphCanvas() {
             { key: 'left', placement: [0, 0.5], r: 3, fill: '#3B82F6', stroke: '#fff', lineWidth: 1 },
           ],
         },
-        // 状态
         state: {
           highlight: {
             stroke: '#3B82F6',
-            lineWidth: 2.5,
+            lineWidth: 3,
             shadowColor: 'rgba(59, 130, 246, 0.3)',
             shadowBlur: 12,
           },
           dim: {
-            opacity: 0.3,
+            opacity: 0.25,
           },
         },
       },
