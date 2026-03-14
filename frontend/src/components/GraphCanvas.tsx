@@ -103,7 +103,9 @@ function buildG6Data(
           label: title,
         },
       };
-    });
+    })
+    // 按半径降序排列：大圆在外圈、小圆在内圈
+    .sort((a, b) => (b.data.nodeRadius || 30) - (a.data.nodeRadius || 30));
 
   // 边
   const edges = graphData.edges.map(e => ({
@@ -149,11 +151,11 @@ export default function GraphCanvas() {
       padding: [60, 60, 60, 60],
       animation: true,
 
-      // 布局 — combo-combined: 内部 Concentric + 外部 gForce（含 Combo 碰撞）
+      // 布局 — combo-combined: 内部 Concentric + 外部 gForce（含碰撞）
       layout: {
         type: 'combo-combined',
-        comboPadding: 5,
-        spacing: 20,
+        comboPadding: 8,
+        spacing: 30,
         nodeSize: 80,
       },
 
