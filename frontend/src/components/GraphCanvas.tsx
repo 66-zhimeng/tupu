@@ -52,9 +52,21 @@ function buildG6Data(
   const parentIds = new Set<string>();
   graphData.nodes.forEach(n => { if (n.parent_id) parentIds.add(n.parent_id); });
 
-  // Combos = 有子任务的父任务
+  // 找出只有叶子节点子代的父任务（才创建 Combo）
+  // 如果一个父任务的子节点中有任何一个也是父任务（拥有自己的子节点），则不创建 Combo
+  // 这样保证只有最底层的分组成为 Combo，避免大圆套小圆
+  const deepestParents = new Set<string>();
+  parentIds.forEach(pid => {
+    const children = graphData.nodes.filter(n => n.parent_id === pid);
+    const hasComboChild = children.some(c => parentIds.has(c.id));
+    if (!hasComboChild && children.length > 0) {
+      deepestParents.add(pid);
+    }
+  });
+
+  // Combos = 只有最底层父任务
   const combos = graphData.nodes
-    .filter(n => parentIds.has(n.id))
+    .filter(n => deepestParents.has(n.id))
     .map((node: GraphNode) => {
       const color = progressColor(node.computed_progress, node.status);
       const childCount = graphData.nodes.filter(c => c.parent_id === node.id).length;
@@ -66,13 +78,8 @@ function buildG6Data(
       if (node.computed_progress > 0) parts.push(`${node.computed_progress.toFixed(0)}%`);
       parts.push(`${childCount}子任务`);
 
-      const parentComboId = node.parent_id && parentIds.has(node.parent_id)
-        ? node.parent_id
-        : undefined;
-
       return {
         id: node.id,
-        combo: parentComboId,
         data: {
           ...node,
           progressColor: color,
@@ -159,17 +166,12 @@ export default function GraphCanvas() {
       padding: [60, 60, 60, 60],
       animation: true,
 
-      // 布局
+      // 布局 — combo-combined: 默认内部 Concentric + 外部 gForce（含 Combo 碰撞）
       layout: {
-        type: 'd3-force',
-        preventOverlap: true,
-        nodeStrength: -800,
-        edgeStrength: 0.2,
-        collide: {
-          strength: 1.0,
-          radius: (d: any) => (d.data?.nodeWidth || 140) / 2 + 50,
-          iterations: 3,
-        },
+        type: 'combo-combined',
+        comboPadding: 30,
+        spacing: 100,
+        nodeSize: 160,
       },
 
       // 交互
@@ -331,7 +333,7 @@ export default function GraphCanvas() {
           lineWidth: 1.5,
           lineDash: [6, 4],
           radius: 14,
-          padding: 24,
+          padding: 15,
           labelText: (d: any) => d.data?.label || '',
           labelFill: '#334155',
           labelFontSize: 13,
