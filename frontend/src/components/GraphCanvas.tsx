@@ -44,68 +44,165 @@ function buildG6Data(
 ) {
   if (!graphData) return { nodes: [], edges: [], combos: [] };
 
-  const parentIds = new Set<string>();
-  graphData.nodes.forEach(n => { if (n.parent_id) parentIds.add(n.parent_id); });
+  // ===== 构建树结构 =====
+  const nodeMap = new Map<string, GraphNode>();
+  const childrenMap = new Map<string, GraphNode[]>();
+  graphData.nodes.forEach(n => {
+    nodeMap.set(n.id, n);
+    if (n.parent_id) {
+      if (!childrenMap.has(n.parent_id)) childrenMap.set(n.parent_id, []);
+      childrenMap.get(n.parent_id)!.push(n);
+    }
+  });
 
-  // Combos = 所有有子任务的父任务（支持多层嵌套）
-  const combos = graphData.nodes
-    .filter(n => parentIds.has(n.id))
-    .map((node: GraphNode) => {
-      const color = progressColor(node.computed_progress, node.status);
-      const childCount = graphData.nodes.filter(c => c.parent_id === node.id).length;
-      const title = node.title.length > 12 ? node.title.slice(0, 12) + '…' : node.title;
+  // ===== 递归计算每个节点的视觉半径 =====
+  const radiusMap = new Map<string, number>();
 
-      const parts: string[] = [title];
-      if (node.assignee) parts.push(`${node.assignee}`);
-      if (node.computed_hours > 0) parts.push(`${node.computed_hours.toFixed(0)}h`);
-      if (node.computed_progress > 0) parts.push(`${node.computed_progress.toFixed(0)}%`);
-      parts.push(`${childCount}子任务`);
+  function computeRadius(nodeId: string): number {
+    if (radiusMap.has(nodeId)) return radiusMap.get(nodeId)!;
+    const children = childrenMap.get(nodeId) || [];
+    const node = nodeMap.get(nodeId);
+    const hours = node?.computed_hours || node?.estimated_hours || 0;
 
-      // 嵌套：如果该 combo 的 parent_id 也是一个 combo，则嵌套
-      const parentComboId = node.parent_id && parentIds.has(node.parent_id)
-        ? node.parent_id
-        : undefined;
+    if (children.length === 0) {
+      // 叶子节点
+      const r = nodeRadius(hours);
+      radiusMap.set(nodeId, r);
+      return r;
+    }
 
-      return {
-        id: node.id,
-        combo: parentComboId,
-        data: {
-          ...node,
-          progressColor: color,
-          label: parts.join(' · '),
-          childCount,
-        },
-      };
+    // 父节点：半径 = 能容纳所有子节点的最小圆
+    const childRadii = children.map(c => computeRadius(c.id));
+    // 简单公式：所有子圆面积之和 → 父圆面积 + 间距
+    const totalChildArea = childRadii.reduce((sum, r) => sum + Math.PI * r * r, 0);
+    const baseR = Math.sqrt(totalChildArea / Math.PI) * 1.6 + 20; // 1.6 缩放 + 20px padding
+    const minR = Math.max(...childRadii) + 25; // 至少能放下最大子节点
+    const r = Math.max(baseR, minR, 40);
+    radiusMap.set(nodeId, r);
+    return r;
+  }
+
+  graphData.nodes.forEach(n => computeRadius(n.id));
+
+  // ===== 计算子节点在父节点内部的相对位置 =====
+  const relPosMap = new Map<string, { dx: number; dy: number }>();
+
+  function layoutChildren(parentId: string) {
+    const children = childrenMap.get(parentId) || [];
+    if (children.length === 0) return;
+
+    const parentR = radiusMap.get(parentId) || 60;
+
+    if (children.length === 1) {
+      relPosMap.set(children[0].id, { dx: 0, dy: 0 });
+    } else {
+      // 在父圆内部按同心圆排列子节点
+      const placeR = parentR * 0.55; // 子节点排列的轨道半径
+      children.forEach((child, i) => {
+        const angle = (2 * Math.PI * i) / children.length - Math.PI / 2;
+        relPosMap.set(child.id, {
+          dx: Math.cos(angle) * placeR,
+          dy: Math.sin(angle) * placeR,
+        });
+      });
+    }
+
+    // 递归处理子节点的子节点
+    children.forEach(c => layoutChildren(c.id));
+  }
+
+  // 对所有顶层节点的子节点计算相对位置
+  graphData.nodes.forEach(n => {
+    if (!n.parent_id) layoutChildren(n.id);
+  });
+
+  // ===== 顶层节点布局（网格排列） =====
+  const topNodes = graphData.nodes.filter(n => !n.parent_id);
+  const topPositions = new Map<string, { x: number; y: number }>();
+
+  // 按半径降序排列顶层节点
+  const sortedTop = [...topNodes].sort((a, b) =>
+    (radiusMap.get(b.id) || 30) - (radiusMap.get(a.id) || 30)
+  );
+
+  // 动态排列：考虑每个节点的实际半径
+  const gap = 40; // 节点间最小间隙
+  let cursorX = 0;
+  let cursorY = 0;
+  let rowMaxH = 0;
+  const rowWidth = 800; // 每行最大宽度
+
+  sortedTop.forEach(n => {
+    const r = radiusMap.get(n.id) || 30;
+    if (cursorX + r * 2 > rowWidth && cursorX > 0) {
+      // 换行
+      cursorX = 0;
+      cursorY += rowMaxH + gap;
+      rowMaxH = 0;
+    }
+    topPositions.set(n.id, {
+      x: cursorX + r,
+      y: cursorY + r,
     });
+    cursorX += r * 2 + gap;
+    rowMaxH = Math.max(rowMaxH, r * 2);
+  });
 
-  const comboIds = new Set(combos.map(c => c.id));
+  // ===== 递归计算每个节点的绝对位置 =====
+  const absPos = new Map<string, { x: number; y: number }>();
 
-  // Nodes = 非 combo 的任务节点
-  const nodes = graphData.nodes
-    .filter(n => !comboIds.has(n.id))
-    .map((node: GraphNode) => {
-      const color = progressColor(node.computed_progress, node.status);
-      const title = node.title.length > 8 ? node.title.slice(0, 8) + '…' : node.title;
+  function computeAbsPos(nodeId: string, parentX: number, parentY: number) {
+    const rel = relPosMap.get(nodeId);
+    const x = parentX + (rel?.dx || 0);
+    const y = parentY + (rel?.dy || 0);
+    absPos.set(nodeId, { x, y });
+    // 递归子节点
+    const children = childrenMap.get(nodeId) || [];
+    children.forEach(c => computeAbsPos(c.id, x, y));
+  }
 
-      const comboId = node.parent_id && comboIds.has(node.parent_id)
-        ? node.parent_id
-        : undefined;
+  topNodes.forEach(n => {
+    const pos = topPositions.get(n.id) || { x: 0, y: 0 };
+    absPos.set(n.id, pos);
+    const children = childrenMap.get(n.id) || [];
+    children.forEach(c => computeAbsPos(c.id, pos.x, pos.y));
+  });
 
-      const r = nodeRadius(node.computed_hours || node.estimated_hours);
+  // ===== 构建 G6 节点数据 =====
+  const nodes = graphData.nodes.map((node: GraphNode) => {
+    const color = progressColor(node.computed_progress, node.status);
+    const r = radiusMap.get(node.id) || 30;
+    const pos = absPos.get(node.id) || { x: 0, y: 0 };
+    const isParent = childrenMap.has(node.id);
+    const children = childrenMap.get(node.id) || [];
+    const title = node.title.length > 8 ? node.title.slice(0, 8) + '…' : node.title;
 
-      return {
-        id: node.id,
-        combo: comboId,
-        data: {
-          ...node,
-          nodeRadius: r,
-          progressColor: color,
-          label: title,
-        },
-      };
-    })
-    // 按半径降序排列：大圆在外圈、小圆在内圈
-    .sort((a, b) => (b.data.nodeRadius || 30) - (a.data.nodeRadius || 30));
+    return {
+      id: node.id,
+      style: { x: pos.x, y: pos.y },
+      data: {
+        ...node,
+        nodeRadius: r,
+        progressColor: color,
+        label: title,
+        isParent,
+        childCount: children.length,
+        depth: getDepth(node),
+      },
+    };
+  });
+
+  function getDepth(node: GraphNode): number {
+    let d = 0;
+    let current = node;
+    while (current.parent_id) {
+      d++;
+      const parent = nodeMap.get(current.parent_id);
+      if (!parent) break;
+      current = parent;
+    }
+    return d;
+  }
 
   // 边
   const edges = graphData.edges.map(e => ({
@@ -118,7 +215,7 @@ function buildG6Data(
     },
   }));
 
-  return { nodes, edges, combos };
+  return { nodes, edges, combos: [] };
 }
 
 /* ===== 组件 ===== */
@@ -151,23 +248,12 @@ export default function GraphCanvas() {
       padding: [60, 60, 60, 60],
       animation: true,
 
-      // 布局 — combo-combined: 内部 Concentric + 外部 gForce（含碰撞）
-      layout: {
-        type: 'combo-combined',
-        comboPadding: 8,
-        spacing: 30,
-        nodeSize: 80,
-      },
+      // 位置已在 buildG6Data 中预计算，不使用自动布局
 
       // 交互
       behaviors: [
         'drag-canvas',
         'zoom-canvas',
-        {
-          type: 'collapse-expand',
-          key: 'combo-collapse',
-          trigger: 'dblclick',
-        },
         { type: 'drag-element', key: 'drag-node' },
         {
           type: 'hover-activate',
@@ -218,35 +304,37 @@ export default function GraphCanvas() {
         },
       ],
 
-      // 节点样式 — 圆形
+      // 节点样式 — 圆形（父节点大圆 + 叶子节点小圆）
       node: {
         type: 'circle',
         style: {
           size: (d: any) => (d.data?.nodeRadius || 30) * 2,
           fill: (d: any) => {
             const color = d.data?.progressColor || '#94A3B8';
-            // 使用进度颜色作为填充（低透明度）
             return color;
           },
-          fillOpacity: 0.12,
+          // 父节点半透明大圆，叶子节点稍浓
+          fillOpacity: (d: any) => d.data?.isParent ? 0.06 : 0.15,
           stroke: (d: any) => {
             if (d.data?.due_date && d.data?.status === '未完成') {
               if (new Date() > new Date(d.data.due_date)) return '#EF4444';
             }
             return d.data?.progressColor || '#E2E8F0';
           },
-          lineWidth: 2.5,
+          lineWidth: (d: any) => d.data?.isParent ? 1.5 : 2.5,
+          lineDash: (d: any) => d.data?.isParent ? [6, 4] : undefined,
           opacity: (d: any) => (d.data?.status === '已取消' ? 0.4 : 1),
-          shadowColor: 'rgba(0, 0, 0, 0.08)',
-          shadowBlur: 6,
-          shadowOffsetY: 2,
+          shadowColor: 'rgba(0, 0, 0, 0.06)',
+          shadowBlur: 4,
+          shadowOffsetY: 1,
 
           // 标签
           labelText: (d: any) => d.data?.label || '',
           labelFill: '#1E293B',
-          labelFontSize: 11,
+          labelFontSize: (d: any) => d.data?.isParent ? 13 : 11,
           labelFontWeight: 600,
-          labelPlacement: 'center',
+          // 父节点标签在顶部，叶子标签在中心
+          labelPlacement: (d: any) => d.data?.isParent ? 'top' : 'center',
           labelFontFamily: "'Inter', sans-serif",
 
           // 连接端口
@@ -266,7 +354,7 @@ export default function GraphCanvas() {
             shadowBlur: 12,
           },
           dim: {
-            opacity: 0.25,
+            opacity: 0.2,
           },
         },
       },
@@ -307,26 +395,7 @@ export default function GraphCanvas() {
         },
       },
 
-      // Combo 样式
-      combo: {
-        style: {
-          fill: (d: any) => d.data?.progressColor || '#F1F5F9',
-          fillOpacity: 0.08,
-          stroke: (d: any) => d.data?.progressColor || '#CBD5E1',
-          lineWidth: 1.5,
-          lineDash: [6, 4],
-          radius: 14,
-          padding: 15,
-          labelText: (d: any) => d.data?.label || '',
-          labelFill: '#334155',
-          labelFontSize: 13,
-          labelFontWeight: 600,
-          labelPlacement: 'top',
-          collapsedMarker: true,
-          collapsedMarkerFontSize: 12,
-          collapsedMarkerFill: '#334155',
-        },
-      },
+      // 不使用 Combo（所有任务都是圆节点）
     });
 
     graphRef.current = graph;
