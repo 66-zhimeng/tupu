@@ -1,12 +1,14 @@
 /**
- * 图谱画布组件 - AntV G6 力导向图
+ * 图谱画布组件 — FlowEditor 风格
  *
- * 使用 G6 Combo 实现层级可视化：
- * - 有子任务的父任务 → Combo（可折叠分组）
- * - 子任务 → Combo 内的子节点
- * - 双击 Combo → 展开/收起（内置动画）
- * - 无子任务的任务 → 普通节点
- * - 节点颜色 = 完成度进度渐变
+ * 功能：
+ * - G6 力导向图 + Combo 层级可视化
+ * - create-edge 交互：拖拽创建依赖连线
+ * - grid-line 网格背景
+ * - minimap 小地图
+ * - hover-activate 悬停高亮关联边
+ * - 节点：矩形卡片样式（标题 + 负责人 + 工时）
+ * - 边：贝塞尔曲线 + 箭头
  */
 import { useEffect, useRef } from 'react';
 import { Graph } from '@antv/g6';
@@ -14,37 +16,39 @@ import { useGraphStore } from '../stores/graphStore';
 import type { GraphNode, GraphMilestone } from '../services/api';
 import './GraphCanvas.css';
 
+/* ===== 辅助函数 ===== */
+
 /** 完成度 → 颜色 */
 function progressColor(pct: number, status: string): string {
-  if (status === '已取消') return '#D5DBDB';
-  if (status === '已完成' || pct >= 100) return '#27AE60';
-  if (pct <= 0) return '#BDC3C7';
+  if (status === '已取消') return '#CBD5E1';
+  if (status === '已完成' || pct >= 100) return '#10B981';
+  if (pct <= 0) return '#94A3B8';
   if (pct < 50) {
     const t = pct / 50;
-    return `rgb(${Math.round(189 - t * 137)},${Math.round(195 - t * 43)},${Math.round(199 + t * 20)})`;
+    return `rgb(${Math.round(148 - t * 89)},${Math.round(163 - t * 33)},${Math.round(184 + t * 62)})`;
   }
   const t = (pct - 50) / 50;
-  return `rgb(${Math.round(52 - t * 13)},${Math.round(152 + t * 22)},${Math.round(219 - t * 123)})`;
+  return `rgb(${Math.round(59 - t * 43)},${Math.round(130 + t * 55)},${Math.round(246 - t * 115)})`;
 }
 
-/** 节点大小 */
-function nodeSize(hours: number): number {
-  const min = 36, max = 80;
+/** 节点尺寸（宽度） */
+function nodeWidth(hours: number): number {
+  const min = 140, max = 220;
   if (!hours || hours <= 0) return min;
-  return Math.min(max, min + Math.sqrt(hours) * 5);
+  return Math.min(max, min + Math.sqrt(hours) * 10);
 }
 
-/**
- * 构建 G6 数据（含 Combo）
- * - 有子任务的父任务 → combo
- * - 子节点指定 combo 字段
- */
+/** 节点高度 */
+function nodeHeight(_hours: number): number {
+  return 52;
+}
+
+/* ===== 构建 G6 数据 ===== */
 function buildG6Data(
   graphData: ReturnType<typeof useGraphStore.getState>['graphData'],
 ) {
   if (!graphData) return { nodes: [], edges: [], combos: [] };
 
-  // 找出所有有子任务的父任务 ID
   const parentIds = new Set<string>();
   graphData.nodes.forEach(n => { if (n.parent_id) parentIds.add(n.parent_id); });
 
@@ -54,15 +58,14 @@ function buildG6Data(
     .map((node: GraphNode) => {
       const color = progressColor(node.computed_progress, node.status);
       const childCount = graphData.nodes.filter(c => c.parent_id === node.id).length;
-      const title = node.title.length > 10 ? node.title.slice(0, 10) + '…' : node.title;
+      const title = node.title.length > 12 ? node.title.slice(0, 12) + '…' : node.title;
 
       const parts: string[] = [title];
-      if (node.assignee) parts.push(`👤${node.assignee}`);
+      if (node.assignee) parts.push(`${node.assignee}`);
       if (node.computed_hours > 0) parts.push(`${node.computed_hours.toFixed(0)}h`);
       if (node.computed_progress > 0) parts.push(`${node.computed_progress.toFixed(0)}%`);
-      parts.push(`📂${childCount}子`);
+      parts.push(`${childCount}子任务`);
 
-      // Combo 也可以嵌套在另一个 combo 里（支持多级）
       const parentComboId = node.parent_id && parentIds.has(node.parent_id)
         ? node.parent_id
         : undefined;
@@ -86,30 +89,33 @@ function buildG6Data(
     .filter(n => !comboIds.has(n.id))
     .map((node: GraphNode) => {
       const color = progressColor(node.computed_progress, node.status);
-      const title = node.title.length > 8 ? node.title.slice(0, 8) + '…' : node.title;
+      const title = node.title.length > 10 ? node.title.slice(0, 10) + '…' : node.title;
 
       const parts: string[] = [title];
-      if (node.assignee) parts.push(`👤${node.assignee}`);
+      if (node.assignee) parts.push(node.assignee);
       if (node.computed_hours > 0) parts.push(`${node.computed_hours.toFixed(0)}h`);
 
-      // 如果父节点是 combo，则属于该 combo
       const comboId = node.parent_id && comboIds.has(node.parent_id)
         ? node.parent_id
         : undefined;
+
+      const w = nodeWidth(node.computed_hours || node.estimated_hours);
+      const h = nodeHeight(node.computed_hours || node.estimated_hours);
 
       return {
         id: node.id,
         combo: comboId,
         data: {
           ...node,
-          size: nodeSize(node.computed_hours || node.estimated_hours),
+          nodeWidth: w,
+          nodeHeight: h,
           progressColor: color,
           label: parts.join('\n'),
         },
       };
     });
 
-  // 依赖关系边
+  // 边
   const edges = graphData.edges.map(e => ({
     id: e.id,
     source: e.source,
@@ -123,6 +129,7 @@ function buildG6Data(
   return { nodes, edges, combos };
 }
 
+/* ===== 组件 ===== */
 export default function GraphCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<Graph | null>(null);
@@ -135,6 +142,9 @@ export default function GraphCanvas() {
     showContextMenu,
     hideContextMenu,
     savePosition,
+    addDependency,
+    enableConnect,
+    setGraphInstance,
   } = useGraphStore();
 
   useEffect(() => { loadGraphData(); }, [loadGraphData]);
@@ -146,94 +156,198 @@ export default function GraphCanvas() {
     const graph = new Graph({
       container: containerRef.current,
       autoFit: 'view',
-      padding: [40, 40, 40, 40],
+      padding: [60, 60, 60, 60],
       animation: true,
+
+      // 布局
       layout: {
         type: 'd3-force',
         preventOverlap: true,
-        nodeStrength: -300,
-        edgeStrength: 0.3,
+        nodeStrength: -800,
+        edgeStrength: 0.2,
         collide: {
-          strength: 0.8,
-          radius: (d: any) => (d.data?.size || 36) / 2 + 10,
+          strength: 1.0,
+          radius: (d: any) => (d.data?.nodeWidth || 140) / 2 + 50,
+          iterations: 3,
         },
       },
+
+      // 交互
       behaviors: [
         'drag-canvas',
         'zoom-canvas',
-        // ★ 内置展开/收起 Combo 行为（双击触发）
         {
           type: 'collapse-expand',
           key: 'combo-collapse',
           trigger: 'dblclick',
         },
         { type: 'drag-element', key: 'drag-node' },
-      ],
-      node: {
-        style: {
-          size: (d: any) => d.data?.size || 36,
-          fill: (d: any) => d.data?.progressColor || '#BDC3C7',
-          stroke: (d: any) => {
-            if (d.data?.due_date && d.data?.status === '未完成') {
-              if (new Date() > new Date(d.data.due_date)) return '#E74C3C';
-            }
-            return d.data?.progressColor || '#BDC3C7';
+        {
+          type: 'hover-activate',
+          key: 'hover-highlight',
+          degree: 1,
+          state: 'highlight',
+          inactiveState: 'dim',
+        },
+        // ★ 拖拽创建边
+        {
+          type: 'create-edge',
+          key: 'create-edge',
+          trigger: 'drag',
+          enable: false, // 默认关闭，通过 toggleConnect() 开启
+          style: {
+            stroke: '#3B82F6',
+            lineWidth: 2,
+            lineDash: [6, 4],
+            endArrow: true,
           },
-          lineWidth: 1,
-          opacity: (d: any) => (d.data?.status === '已取消' ? 0.35 : 1),
+          onCreate: (edge: any) => {
+            const source = edge.source;
+            const target = edge.target;
+            if (source && target && source !== target) {
+              addDependency({
+                source_task_id: source,
+                target_task_id: target,
+              });
+            }
+          },
+        },
+      ],
+
+      // 插件
+      plugins: [
+        {
+          type: 'grid-line',
+          key: 'grid',
+          size: 30,
+          stroke: '#E2E8F0',
+          lineWidth: 0.5,
+        },
+        {
+          type: 'minimap',
+          key: 'minimap',
+          size: [160, 100],
+          position: 'right-bottom',
+        },
+      ],
+
+      // 节点样式 — 矩形卡片
+      node: {
+        type: 'rect',
+        style: {
+          size: (d: any) => [d.data?.nodeWidth || 140, d.data?.nodeHeight || 52],
+          fill: '#FFFFFF',
+          stroke: (d: any) => {
+            // 逾期红色边框
+            if (d.data?.due_date && d.data?.status === '未完成') {
+              if (new Date() > new Date(d.data.due_date)) return '#EF4444';
+            }
+            return d.data?.progressColor || '#E2E8F0';
+          },
+          lineWidth: 2,
+          radius: 10,
+          opacity: (d: any) => (d.data?.status === '已取消' ? 0.4 : 1),
+          shadowColor: 'rgba(0, 0, 0, 0.06)',
+          shadowBlur: 8,
+          shadowOffsetY: 2,
+
+          // 标签
           labelText: (d: any) => d.data?.label || '',
-          labelFill: '#333',
-          labelFontSize: 11,
+          labelFill: '#1E293B',
+          labelFontSize: 12,
+          labelFontWeight: 600,
           labelPlacement: 'center',
-          labelLineHeight: 14,
-          labelFontWeight: 'bold' as const,
+          labelLineHeight: 16,
+          labelFontFamily: "'Inter', sans-serif",
+
+          // 左侧进度色条
+          badgeFill: (d: any) => d.data?.progressColor || '#94A3B8',
+
+          // 连接端口
+          port: true,
+          ports: [
+            { key: 'top', placement: [0.5, 0], r: 3, fill: '#3B82F6', stroke: '#fff', lineWidth: 1 },
+            { key: 'right', placement: [1, 0.5], r: 3, fill: '#3B82F6', stroke: '#fff', lineWidth: 1 },
+            { key: 'bottom', placement: [0.5, 1], r: 3, fill: '#3B82F6', stroke: '#fff', lineWidth: 1 },
+            { key: 'left', placement: [0, 0.5], r: 3, fill: '#3B82F6', stroke: '#fff', lineWidth: 1 },
+          ],
+        },
+        // 状态
+        state: {
+          highlight: {
+            stroke: '#3B82F6',
+            lineWidth: 2.5,
+            shadowColor: 'rgba(59, 130, 246, 0.3)',
+            shadowBlur: 12,
+          },
+          dim: {
+            opacity: 0.3,
+          },
         },
       },
+
+      // 边样式
       edge: {
+        type: 'cubic',
         style: {
-          stroke: (d: any) => (d.data?.edgeType === 'iterative' ? '#F39C12' : '#7F8C8D'),
-          lineWidth: (d: any) => (d.data?.edgeType === 'iterative' ? 2 : 1.5),
+          stroke: (d: any) => (d.data?.edgeType === 'iterative' ? '#F59E0B' : '#94A3B8'),
+          lineWidth: (d: any) => (d.data?.edgeType === 'iterative' ? 2.5 : 1.5),
           lineDash: (d: any) => (d.data?.edgeType === 'iterative' ? [6, 4] : undefined),
-          opacity: 0.5,
+          opacity: 0.6,
           endArrow: true,
+          endArrowSize: 6,
           labelText: (d: any) => {
             if (d.data?.edgeType === 'iterative' && d.data?.iterationCount > 0) {
               return `×${d.data.iterationCount}`;
             }
             return '';
           },
-          labelFill: '#F39C12',
+          labelFill: '#F59E0B',
           labelFontSize: 10,
+          labelFontWeight: 600,
+          labelBackground: true,
+          labelBackgroundFill: '#FFFBEB',
+          labelBackgroundRadius: 4,
+          labelBackgroundPadding: [2, 6],
+        },
+        state: {
+          highlight: {
+            stroke: '#3B82F6',
+            lineWidth: 2.5,
+            opacity: 1,
+          },
+          dim: {
+            opacity: 0.15,
+          },
         },
       },
+
+      // Combo 样式
       combo: {
         style: {
-          // Combo 样式（父任务的分组框）
-          fill: (d: any) => {
-            const color = d.data?.progressColor || '#ECF0F1';
-            return color;
-          },
-          fillOpacity: 0.15,
-          stroke: (d: any) => d.data?.progressColor || '#BDC3C7',
-          lineWidth: 2,
-          lineDash: [4, 4],
-          radius: 12,
-          padding: 20,
+          fill: (d: any) => d.data?.progressColor || '#F1F5F9',
+          fillOpacity: 0.08,
+          stroke: (d: any) => d.data?.progressColor || '#CBD5E1',
+          lineWidth: 1.5,
+          lineDash: [6, 4],
+          radius: 14,
+          padding: 24,
           labelText: (d: any) => d.data?.label || '',
-          labelFill: '#2C3E50',
+          labelFill: '#334155',
           labelFontSize: 13,
-          labelFontWeight: 'bold' as const,
+          labelFontWeight: 600,
           labelPlacement: 'top',
           collapsedMarker: true,
           collapsedMarkerFontSize: 12,
-          collapsedMarkerFill: '#2C3E50',
+          collapsedMarkerFill: '#334155',
         },
       },
     });
 
     graphRef.current = graph;
+    setGraphInstance(graph);
 
-    // ★ 单击（延时 300ms 防冲突双击）
+    // ★ 单击（延时 250ms 防双击冲突）
     graph.on('node:click', (evt: any) => {
       const id = evt.target?.id;
       if (!id) return;
@@ -241,15 +355,10 @@ export default function GraphCanvas() {
       clickTimerRef.current = setTimeout(() => {
         selectNode(id, 'task');
         clickTimerRef.current = null;
-      }, 300);
+      }, 250);
     });
 
-
-    // Combo: 双击由 collapse-expand behavior 自动处理
-    // 单击 combo 不做任何操作（避免干扰双击展开/收起）
-    // 如需编辑父任务 → 右键菜单选「编辑」
     graph.on('combo:dblclick', () => {
-      // 取消可能的单击定时器
       if (clickTimerRef.current) {
         clearTimeout(clickTimerRef.current);
         clickTimerRef.current = null;
@@ -284,7 +393,7 @@ export default function GraphCanvas() {
 
     graph.on('canvas:click', () => hideContextMenu());
 
-    // 拖拽保存
+    // 拖拽保存位置
     graph.on('node:dragend', (evt: any) => {
       const id = evt.target?.id;
       if (!id) return;
@@ -294,6 +403,7 @@ export default function GraphCanvas() {
 
     return () => {
       if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+      setGraphInstance(null);
       graph.destroy();
       graphRef.current = null;
     };
@@ -309,39 +419,41 @@ export default function GraphCanvas() {
   const milestones = graphData?.milestones || [];
 
   return (
-    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+    <div className={`canvas-wrapper ${enableConnect ? 'connect-mode' : ''}`}>
+      {/* 里程碑标签栏 */}
       {milestones.length > 0 && (
         <div className="canvas-top-bar">
           <div className="milestone-tags">
             {milestones.map((ms: GraphMilestone) => (
-              <span
+              <button
                 key={ms.id}
                 className="milestone-tag"
                 onClick={() => selectNode(ms.id, 'milestone')}
               >
-                ◆ {ms.title}
+                <span className="milestone-icon">◆</span>
+                {ms.title}
                 {ms.computed_progress > 0 && (
                   <span className="milestone-pct">{Math.round(ms.computed_progress)}%</span>
                 )}
-              </span>
+              </button>
             ))}
           </div>
         </div>
       )}
 
-      <div className="zoom-hint">
-        双击展开/收起子任务 · 滚轮缩放 · 拖拽移动 · 右键菜单 · 单击编辑
+      {/* 操作提示 */}
+      <div className="canvas-hint">
+        {enableConnect
+          ? '🔗 连线模式 — 从节点拖向目标节点创建依赖'
+          : '双击展开/收起 · 滚轮缩放 · 右键菜单'}
       </div>
 
+      {/* G6 画布容器 */}
       <div
         ref={containerRef}
         id="graph-canvas"
         onContextMenu={(e) => e.preventDefault()}
-        style={{
-          width: '100%',
-          height: milestones.length > 0 ? 'calc(100% - 40px)' : '100%',
-          background: '#FAFBFC',
-        }}
+        className="canvas-container"
       />
     </div>
   );

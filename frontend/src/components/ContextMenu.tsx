@@ -1,7 +1,15 @@
 /**
- * 右键菜单组件
+ * 右键菜单组件 — 升级版
+ * 毛玻璃背景 + Ant Design 图标
  */
 import { useEffect, useRef } from 'react';
+import {
+  EditOutlined,
+  PlusOutlined,
+  DeleteOutlined,
+  FlagOutlined,
+  ZoomInOutlined,
+} from '@ant-design/icons';
 import { useGraphStore } from '../stores/graphStore';
 import { deleteMilestone } from '../services/api';
 import './ContextMenu.css';
@@ -35,61 +43,57 @@ export default function ContextMenu() {
 
   const { x, y, nodeId, nodeType, canvasX, canvasY } = contextMenu;
 
-  // 检查节点是否有子任务
   const hasChildren = nodeId && nodeType === 'task' && graphData
     ? graphData.nodes.some(n => n.parent_id === nodeId)
     : false;
 
-  // 在空白区域右键
+  // 空白区域右键
   if (!nodeId) {
     return (
-      <div ref={menuRef} className="context-menu" style={{ left: x, top: y }}>
+      <div ref={menuRef} className="ctx-menu glass" style={{ left: x, top: y }}>
+        <div className="ctx-menu-group-label">创建</div>
         <div
-          className="context-menu-item"
+          className="ctx-menu-item"
           onClick={() => {
-            addTask({
-              title: '新任务',
-              position_x: canvasX,
-              position_y: canvasY,
-            });
+            addTask({ title: '新任务', position_x: canvasX, position_y: canvasY });
             hideContextMenu();
           }}
         >
-          ➕ 新建任务
+          <PlusOutlined className="ctx-icon" />
+          <span>新建任务</span>
         </div>
         <div
-          className="context-menu-item"
+          className="ctx-menu-item"
           onClick={() => {
-            addMilestone({
-              title: '新里程碑',
-              position_x: canvasX,
-              position_y: canvasY,
-            });
+            addMilestone({ title: '新里程碑', position_x: canvasX, position_y: canvasY });
             hideContextMenu();
           }}
         >
-          🏁 新建里程碑
+          <FlagOutlined className="ctx-icon" />
+          <span>新建里程碑</span>
         </div>
       </div>
     );
   }
 
-  // 在节点上右键
+  // 节点上右键
   return (
-    <div ref={menuRef} className="context-menu" style={{ left: x, top: y }}>
+    <div ref={menuRef} className="ctx-menu glass" style={{ left: x, top: y }}>
       <div
-        className="context-menu-item"
+        className="ctx-menu-item"
         onClick={() => {
           selectNode(nodeId, nodeType || 'task');
           hideContextMenu();
         }}
       >
-        📝 编辑
+        <EditOutlined className="ctx-icon" />
+        <span>编辑</span>
       </div>
+
       {nodeType === 'task' && (
         <>
           <div
-            className="context-menu-item"
+            className="ctx-menu-item"
             onClick={() => {
               addTask({
                 title: '新子任务',
@@ -100,26 +104,26 @@ export default function ContextMenu() {
               hideContextMenu();
             }}
           >
-            ➕ 新建子任务
+            <PlusOutlined className="ctx-icon" />
+            <span>新建子任务</span>
           </div>
 
-          {/* ★ 进入子任务层级 */}
           {hasChildren && (
             <div
-              className="context-menu-item"
+              className="ctx-menu-item"
               onClick={() => {
-                // 通过 window 事件通知 GraphCanvas 进行层级切换
                 window.dispatchEvent(new CustomEvent('drillInto', { detail: nodeId }));
                 hideContextMenu();
               }}
             >
-              🔍 进入子任务
+              <ZoomInOutlined className="ctx-icon" />
+              <span>进入子任务</span>
             </div>
           )}
 
-          <div className="context-menu-divider" />
+          <div className="ctx-menu-divider" />
           <div
-            className="context-menu-item context-menu-item--danger"
+            className="ctx-menu-item ctx-menu-item--danger"
             onClick={() => {
               if (window.confirm('确定删除此任务及其所有子任务？')) {
                 removeTask(nodeId);
@@ -127,17 +131,17 @@ export default function ContextMenu() {
               hideContextMenu();
             }}
           >
-            🗑️ 删除任务
+            <DeleteOutlined className="ctx-icon" />
+            <span>删除任务</span>
           </div>
         </>
       )}
 
-      {/* ★ 里程碑右键删除 */}
       {nodeType === 'milestone' && (
         <>
-          <div className="context-menu-divider" />
+          <div className="ctx-menu-divider" />
           <div
-            className="context-menu-item context-menu-item--danger"
+            className="ctx-menu-item ctx-menu-item--danger"
             onClick={async () => {
               if (window.confirm('确定删除此里程碑？')) {
                 try {
@@ -150,7 +154,8 @@ export default function ContextMenu() {
               hideContextMenu();
             }}
           >
-            🗑️ 删除里程碑
+            <DeleteOutlined className="ctx-icon" />
+            <span>删除里程碑</span>
           </div>
         </>
       )}

@@ -1,27 +1,114 @@
-/* 顶部工具栏样式 */
+/* TopBar — FlowEditor 风格工具栏 */
+
 .top-bar {
   height: 52px;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  padding: 0 16px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border-bottom: 1px solid var(--color-border);
   z-index: 100;
+  gap: 12px;
 }
 
+/* 左侧品牌区 */
 .top-bar-left {
   display: flex;
   align-items: center;
   gap: 16px;
+  flex-shrink: 0;
 }
 
+.top-bar-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand-icon {
+  font-size: 20px;
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+.brand-title {
+  font-size: 15px;
+  letter-spacing: -0.3px;
+  color: var(--color-text) !important;
+}
+
+/* 统计信息 */
 .top-bar-stats {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.6);
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
+.stat-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.stat-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* 中间工具组 */
+.top-bar-center {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.toolbar-group {
+  display: flex;
+}
+
+.toolbar-divider {
+  height: 20px !important;
+  margin: 0 6px !important;
+  border-color: var(--color-border) !important;
+}
+
+.toolbar-btn {
+  border-radius: var(--radius-sm) !important;
+  border-color: var(--color-border) !important;
+  color: var(--color-text-secondary) !important;
+  font-size: 13px !important;
+  transition: all var(--transition-fast) !important;
+}
+
+.toolbar-btn:hover {
+  color: var(--color-primary) !important;
+  border-color: var(--color-primary) !important;
+  background: var(--color-primary-light) !important;
+}
+
+/* 连线按钮激活态 */
+.connect-btn.active {
+  color: #fff !important;
+  background: var(--color-primary) !important;
+  border-color: var(--color-primary) !important;
+  box-shadow: 0 0 0 3px var(--color-primary-glow) !important;
+}
+
+.connect-btn.active:hover {
+  background: var(--color-primary-hover) !important;
+}
+
+/* 右侧 */
 .top-bar-right {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
 }

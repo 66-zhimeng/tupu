@@ -1,98 +1,113 @@
-/* GraphCanvas 组件样式 */
+/* GraphCanvas — FlowEditor 风格 */
 
-/* 顶部导航栏 */
+.canvas-wrapper {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 连线模式 */
+.canvas-wrapper.connect-mode .canvas-container {
+  cursor: crosshair;
+}
+
+/* 画布容器 */
+.canvas-container {
+  flex: 1;
+  width: 100%;
+  background: var(--canvas-bg);
+}
+
+/* 里程碑标签栏 */
 .canvas-top-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 8px 16px;
-  background: #fff;
-  border-bottom: 1px solid #eee;
-  min-height: 40px;
-  gap: 16px;
+  padding: 6px 16px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border-bottom: 1px solid var(--color-border-light);
+  min-height: 38px;
+  z-index: 10;
 }
 
-/* 面包屑 */
-.breadcrumbs {
-  display: flex;
-  align-items: center;
-  font-size: 13px;
-  flex-shrink: 0;
-}
-
-.bc-sep {
-  margin: 0 2px;
-  color: #ccc;
-}
-
-.bc-item {
-  color: #3498DB;
-  cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 4px;
-  transition: background 0.15s;
-}
-
-.bc-item:hover {
-  background: #EBF5FB;
-}
-
-.bc-item.active {
-  color: #2C3E50;
-  font-weight: 600;
-  cursor: default;
-}
-
-.bc-item.active:hover {
-  background: transparent;
-}
-
-/* 里程碑标签 */
 .milestone-tags {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   overflow-x: auto;
 }
 
 .milestone-tag {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 12px;
-  background: #F8F9FA;
-  border: 1px solid #E8E8E8;
-  border-radius: 14px;
+  gap: 5px;
+  padding: 4px 14px;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
   font-size: 12px;
-  color: #2C3E50;
+  font-weight: 500;
+  color: var(--color-text);
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.15s;
+  transition: all var(--transition-fast);
+  font-family: var(--font-sans);
+  outline: none;
 }
 
 .milestone-tag:hover {
-  background: #EBF5FB;
-  border-color: #3498DB;
+  background: var(--color-primary-light);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.milestone-icon {
+  color: var(--color-info);
+  font-size: 10px;
 }
 
 .milestone-pct {
-  color: #3498DB;
-  font-weight: 600;
+  color: var(--color-primary);
+  font-weight: 700;
   margin-left: 2px;
 }
 
-/* 缩放提示 */
-.zoom-hint {
+/* 操作提示 */
+.canvas-hint {
   position: absolute;
   bottom: 16px;
   left: 50%;
   transform: translateX(-50%);
-  padding: 5px 14px;
-  background: rgba(44, 62, 80, 0.75);
-  color: #fff;
+  padding: 6px 16px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  color: var(--color-text-secondary);
   font-size: 11px;
-  border-radius: 14px;
+  font-weight: 500;
+  border-radius: var(--radius-xl);
   z-index: 10;
   pointer-events: none;
-  opacity: 0.6;
+  box-shadow: var(--shadow-sm);
+  letter-spacing: 0.2px;
+}
+
+.connect-mode .canvas-hint {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.3);
+  color: var(--color-primary);
+}
+
+/* Minimap 样式覆盖 */
+.canvas-container :global(.g6-minimap) {
+  border-radius: var(--radius-md) !important;
+  border: 1px solid var(--color-border) !important;
+  box-shadow: var(--shadow-md) !important;
+  overflow: hidden;
 }

@@ -1,4 +1,4 @@
-/* 全局应用样式 */
+/* Graph Studio — App 布局 */
 
 .app-container {
   width: 100vw;
@@ -6,7 +6,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #FAFBFC;
+  background: var(--canvas-bg);
 }
 
 .app-main {
@@ -15,11 +15,17 @@
   overflow: hidden;
 }
 
-/* 全局 antd 覆写 */
+/* Ant Design 覆写 */
 .ant-drawer .ant-drawer-header {
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 .ant-drawer .ant-drawer-body {
   overflow-y: auto;
+  background: var(--color-bg);
+}
+
+/* 连线模式激活时画布光标 */
+.connect-mode-active #graph-canvas {
+  cursor: crosshair;
 }

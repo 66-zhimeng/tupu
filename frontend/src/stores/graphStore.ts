@@ -1,5 +1,6 @@
 /**
  * 全局状态管理 - Zustand Store
+ * 管理图谱数据、UI 状态、连线模式等
  */
 import { create } from 'zustand';
 import {
@@ -20,10 +21,11 @@ import {
   type MilestoneCreate,
   type DependencyCreate,
 } from '../services/api';
+import type { Graph } from '@antv/g6';
 
 /** 面包屑条目 */
 interface BreadcrumbItem {
-  id: string | null; // null = 顶层
+  id: string | null;
   title: string;
 }
 
@@ -33,14 +35,22 @@ interface GraphStore {
   loading: boolean;
   error: string | null;
 
+  // G6 画布实例引用
+  graphInstance: Graph | null;
+  setGraphInstance: (g: Graph | null) => void;
+
   // 层级导航
-  currentParentId: string | null; // null = 顶层视图
+  currentParentId: string | null;
   breadcrumbs: BreadcrumbItem[];
 
   // 选中状态
   selectedNodeId: string | null;
   selectedNodeType: 'task' | 'milestone' | null;
   drawerVisible: boolean;
+
+  // 连线模式
+  enableConnect: boolean;
+  toggleConnect: () => void;
 
   // 右键菜单
   contextMenu: {
@@ -68,12 +78,17 @@ interface GraphStore {
   savePosition: (id: string, x: number, y: number) => Promise<void>;
   addChildrenBatch: (parentId: string, titles: string[], assignee?: string) => Promise<void>;
 
-  // 层级导航方法
-  drillDown: (taskId: string) => void;  // 双击进入子任务视图
-  goUp: () => void;                      // 返回上一层
-  goToLevel: (index: number) => void;    // 面包屑跳转到指定层
+  // 画布控制
+  zoomIn: () => void;
+  zoomOut: () => void;
+  fitView: () => void;
 
-  // 获取当前层级的节点
+  // 层级导航
+  drillDown: (taskId: string) => void;
+  goUp: () => void;
+  goToLevel: (index: number) => void;
+
+  // Helpers
   getCurrentLevelNodes: () => GraphNode[];
   getSelectedNode: () => GraphNode | GraphMilestone | null;
 }
@@ -82,12 +97,40 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
   graphData: null,
   loading: false,
   error: null,
+  graphInstance: null,
   currentParentId: null,
   breadcrumbs: [{ id: null, title: '全部任务' }],
   selectedNodeId: null,
   selectedNodeType: null,
   drawerVisible: false,
+  enableConnect: false,
   contextMenu: { visible: false, x: 0, y: 0, canvasX: 0, canvasY: 0 },
+
+  setGraphInstance: (g) => set({ graphInstance: g }),
+
+  toggleConnect: () => {
+    const next = !get().enableConnect;
+    set({ enableConnect: next });
+    // 动态切换 create-edge 行为
+    const graph = get().graphInstance;
+    if (graph) {
+      graph.updateBehavior({ key: 'create-edge', enable: next });
+    }
+  },
+
+  // ===== 画布缩放控制 =====
+  zoomIn: () => {
+    const graph = get().graphInstance;
+    if (graph) graph.zoomBy(1.2);
+  },
+  zoomOut: () => {
+    const graph = get().graphInstance;
+    if (graph) graph.zoomBy(0.8);
+  },
+  fitView: () => {
+    const graph = get().graphInstance;
+    if (graph) graph.fitView();
+  },
 
   loadGraphData: async () => {
     set({ loading: true, error: null });
@@ -120,7 +163,6 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
   },
 
   addTask: async (data) => {
-    // 如果在子层级中创建任务，自动设置 parent_id
     const { currentParentId } = get();
     const taskData = currentParentId
       ? { ...data, parent_id: currentParentId }
@@ -167,18 +209,13 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
   },
 
   // ===== 层级导航 =====
-
   drillDown: (taskId) => {
     const { graphData, breadcrumbs } = get();
     if (!graphData) return;
-
     const task = graphData.nodes.find(n => n.id === taskId);
     if (!task) return;
-
-    // 检查此任务是否有子任务
     const children = graphData.nodes.filter(n => n.parent_id === taskId);
-    if (children.length === 0) return; // 叶子节点不能展开
-
+    if (children.length === 0) return;
     set({
       currentParentId: taskId,
       breadcrumbs: [...breadcrumbs, { id: taskId, title: task.title }],
@@ -188,10 +225,8 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
   goUp: () => {
     const { breadcrumbs } = get();
     if (breadcrumbs.length <= 1) return;
-
     const newBreadcrumbs = breadcrumbs.slice(0, -1);
     const parentLevel = newBreadcrumbs[newBreadcrumbs.length - 1];
-
     set({
       currentParentId: parentLevel.id,
       breadcrumbs: newBreadcrumbs,
@@ -201,33 +236,26 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
   goToLevel: (index) => {
     const { breadcrumbs } = get();
     if (index < 0 || index >= breadcrumbs.length) return;
-
     const newBreadcrumbs = breadcrumbs.slice(0, index + 1);
     const targetLevel = newBreadcrumbs[newBreadcrumbs.length - 1];
-
     set({
       currentParentId: targetLevel.id,
       breadcrumbs: newBreadcrumbs,
     });
   },
 
-  // 获取当前层级的节点（只返回 parent_id 匹配的直接子节点）
   getCurrentLevelNodes: () => {
     const { graphData, currentParentId } = get();
     if (!graphData) return [];
-
     return graphData.nodes.filter(n => {
-      if (currentParentId === null) {
-        return !n.parent_id; // 顶层：没有 parent 的任务
-      }
-      return n.parent_id === currentParentId; // 子层级：parent_id 匹配
+      if (currentParentId === null) return !n.parent_id;
+      return n.parent_id === currentParentId;
     });
   },
 
   getSelectedNode: () => {
     const { graphData, selectedNodeId, selectedNodeType } = get();
     if (!graphData || !selectedNodeId) return null;
-
     if (selectedNodeType === 'milestone') {
       return graphData.milestones.find(m => m.id === selectedNodeId) || null;
     }
