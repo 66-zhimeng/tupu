@@ -203,7 +203,7 @@ export default function TaskDrawer() {
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
                     <Tag color="blue" icon={<ClockCircleOutlined />}>
-                      {task.computed_hours?.toFixed(1) || 0}h
+                      {task.computed_hours?.toFixed(1) || 0}人天
                     </Tag>
                     {childCount > 0 && <Tag color="purple">{childCount} 子任务</Tag>}
                     {task.is_leaf && <Tag color="orange">叶子节点</Tag>}
@@ -225,7 +225,7 @@ export default function TaskDrawer() {
                   fontSize: 11,
                   color: '#64748B',
                 }}>
-                  工时 = 子任务之和 ({task.computed_hours?.toFixed(1)}h)  ·  进度 = 已完成占比 ({task.computed_progress?.toFixed(1)}%)
+                  工时 = 子任务之和 ({task.computed_hours?.toFixed(1)}人天)  ·  进度 = 已完成占比 ({task.computed_progress?.toFixed(1)}%)
                 </div>
               )}
             </div>
@@ -259,7 +259,7 @@ export default function TaskDrawer() {
                   </Select>
                 </Form.Item>
                 {task.is_leaf && (
-                  <Form.Item name="estimated_hours" label="预估工时（小时）">
+                  <Form.Item name="estimated_hours" label="预估工时（人天）">
                     <InputNumber min={0} step={0.5} style={{ width: '100%' }} />
                   </Form.Item>
                 )}
@@ -392,7 +392,7 @@ export default function TaskDrawer() {
                   strokeWidth={8}
                 />
                 <div>
-                  <Tag color="blue">{ms.computed_hours?.toFixed(1) || 0}h 总工时</Tag>
+                  <Tag color="blue">{ms.computed_hours?.toFixed(1) || 0}人天 总工时</Tag>
                   <Tag color="purple">{milestoneTasks.length} 个关联任务</Tag>
                 </div>
               </div>
@@ -443,7 +443,7 @@ export default function TaskDrawer() {
                       <span>{t.title}</span>
                       {t.computed_hours > 0 && (
                         <span style={{ color: '#94A3B8', fontSize: 12 }}>
-                          {t.computed_hours.toFixed(1)}h
+                          {t.computed_hours.toFixed(1)}人天
                         </span>
                       )}
                     </div>

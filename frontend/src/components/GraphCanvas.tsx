@@ -31,11 +31,12 @@ function progressColor(pct: number, status: string): string {
   return `rgb(${Math.round(59 - t * 43)},${Math.round(130 + t * 55)},${Math.round(246 - t * 115)})`;
 }
 
-/** 节点圆圈半径 */
+/** 节点圆圈半径（对数增长，有最小尺寸） */
 function nodeRadius(hours: number): number {
-  const min = 30, max = 50;
+  const min = 25, max = 80;
   if (!hours || hours <= 0) return min;
-  return Math.min(max, min + Math.sqrt(hours) * 3);
+  // 对数增长：log2(hours+1) * 8，从25px起步
+  return Math.min(max, min + Math.log2(hours + 1) * 8);
 }
 
 /* ===== 构建 G6 数据 ===== */
@@ -347,6 +348,8 @@ export default function GraphCanvas() {
           lineWidth: (d: any) => d.data?.isParent ? 1.5 : 2.5,
           lineDash: (d: any) => d.data?.isParent ? [6, 4] : undefined,
           opacity: (d: any) => (d.data?.status === '已取消' ? 0.4 : 1),
+          // ★ 父节点只有边框响应事件，填充区域点击穿透到子节点
+          pointerEvents: (d: any) => d.data?.isParent ? 'stroke' : 'auto',
           shadowColor: 'rgba(0, 0, 0, 0.06)',
           shadowBlur: 4,
           shadowOffsetY: 1,
@@ -489,31 +492,11 @@ export default function GraphCanvas() {
       const nd = graph.getNodeData(id);
       if (!nd?.style) return;
 
-      const curX = (nd.style as any).x || 0;
-      const curY = (nd.style as any).y || 0;
+      let curX = (nd.style as any).x || 0;
+      let curY = (nd.style as any).y || 0;
       const last = _lastDragPos.get(id) || { x: curX, y: curY };
-      const moveX = curX - last.x;
-      const moveY = curY - last.y;
-      _lastDragPos.set(id, { x: curX, y: curY });
 
-      // 如果有子节点 → 带动所有子孙一起移动
-      const descendants = getAllDescendants(id);
-      if (descendants.length > 0 && (moveX !== 0 || moveY !== 0)) {
-        const updates = descendants.map(cid => {
-          const cnd = graph.getNodeData(cid);
-          return {
-            id: cid,
-            style: {
-              x: ((cnd?.style as any)?.x || 0) + moveX,
-              y: ((cnd?.style as any)?.y || 0) + moveY,
-            },
-          };
-        });
-        graph.updateNodeData(updates);
-        graph.draw();
-      }
-
-      // 如果是子节点 → 约束在父圆内
+      // ① 先约束本节点在父圆内（若是子节点）
       if (nd.data?.parent_id) {
         const parentId = nd.data.parent_id as string;
         const parentNd = graph.getNodeData(parentId);
@@ -529,14 +512,109 @@ export default function GraphCanvas() {
 
           if (dist > maxDist && maxDist > 0) {
             const scale = maxDist / dist;
-            const clampedX = px + dx * scale;
-            const clampedY = py + dy * scale;
-            graph.updateNodeData([{ id, style: { x: clampedX, y: clampedY } }]);
-            _lastDragPos.set(id, { x: clampedX, y: clampedY });
-            graph.draw();
+            curX = px + dx * scale;
+            curY = py + dy * scale;
+            graph.updateNodeData([{ id, style: { x: curX, y: curY } }]);
           }
         }
       }
+
+      // ② 计算约束后的实际增量
+      const actualMoveX = curX - last.x;
+      const actualMoveY = curY - last.y;
+      _lastDragPos.set(id, { x: curX, y: curY });
+
+      // ③ 用实际增量移动所有子孙（父节点被边界卡住时增量为0，子孙也不动）
+      const descendants = getAllDescendants(id);
+      if (descendants.length > 0 && (actualMoveX !== 0 || actualMoveY !== 0)) {
+        const updates = descendants.map(cid => {
+          const cnd = graph.getNodeData(cid);
+          return {
+            id: cid,
+            style: {
+              x: ((cnd?.style as any)?.x || 0) + actualMoveX,
+              y: ((cnd?.style as any)?.y || 0) + actualMoveY,
+            },
+          };
+        });
+        graph.updateNodeData(updates);
+      }
+
+      // ④ 同级碰撞检测
+      const allNodes = graph.getNodeData();
+      if (Array.isArray(allNodes)) {
+        const myParent = nd.data?.parent_id || null;
+        const myR = Number(nd.data?.nodeRadius) || 30;
+        const collisionGap = 5;
+        const siblingUpdates: any[] = [];
+
+        // 获取父圆信息（用于约束推开后的位置）
+        let pBoundX = 0, pBoundY = 0, pBoundR = Infinity;
+        if (myParent) {
+          const pNd = graph.getNodeData(myParent as string);
+          if (pNd?.style) {
+            pBoundX = (pNd.style as any).x || 0;
+            pBoundY = (pNd.style as any).y || 0;
+            pBoundR = Number(pNd.data?.nodeRadius) || 200;
+          }
+        }
+
+        for (const sib of allNodes) {
+          if (sib.id === id) continue;
+          if ((sib.data?.parent_id || null) !== myParent) continue;
+
+          const sx = (sib.style as any)?.x || 0;
+          const sy = (sib.style as any)?.y || 0;
+          const sr = Number(sib.data?.nodeRadius) || 30;
+          const dx = sx - curX;
+          const dy = sy - curY;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const minDist = myR + sr + collisionGap;
+
+          if (dist < minDist && dist > 0.01) {
+            const pushScale = minDist / dist;
+            let newSx = curX + dx * pushScale;
+            let newSy = curY + dy * pushScale;
+
+            // 约束推开后的位置不超出父圆
+            if (myParent && pBoundR < Infinity) {
+              const pdx = newSx - pBoundX;
+              const pdy = newSy - pBoundY;
+              const pdist = Math.sqrt(pdx * pdx + pdy * pdy);
+              const maxD = pBoundR - sr - 5;
+              if (pdist > maxD && maxD > 0) {
+                const clamp = maxD / pdist;
+                newSx = pBoundX + pdx * clamp;
+                newSy = pBoundY + pdy * clamp;
+              }
+            }
+
+            const pushDx = newSx - sx;
+            const pushDy = newSy - sy;
+            siblingUpdates.push({ id: sib.id as string, style: { x: newSx, y: newSy } });
+            for (const descId of getAllDescendants(sib.id as string)) {
+              const descNd = graph.getNodeData(descId);
+              siblingUpdates.push({
+                id: descId,
+                style: {
+                  x: ((descNd?.style as any)?.x || 0) + pushDx,
+                  y: ((descNd?.style as any)?.y || 0) + pushDy,
+                },
+              });
+            }
+          } else if (dist <= 0.01) {
+            const angle = Math.random() * Math.PI * 2;
+            siblingUpdates.push({
+              id: sib.id as string,
+              style: { x: sx + Math.cos(angle) * minDist, y: sy + Math.sin(angle) * minDist },
+            });
+          }
+        }
+
+        if (siblingUpdates.length > 0) graph.updateNodeData(siblingUpdates);
+      }
+
+      graph.draw();
     });
 
     // 拖拽保存位置

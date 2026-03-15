@@ -57,7 +57,7 @@ export default function TopBar() {
           {totalHours > 0 && (
             <span className="stat-item">
               <span className="stat-dot" style={{ background: 'var(--color-success)' }} />
-              {totalHours.toFixed(0)}h
+              {totalHours.toFixed(0)}人天
             </span>
           )}
         </div>
