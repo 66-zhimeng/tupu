@@ -170,43 +170,79 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
       ? { ...data, parent_id: currentParentId }
       : data;
     await createTask(taskData);
-    await get().loadGraphData();
+    // 后台刷新，不阻塞 UI
+    get().loadGraphData();
   },
 
   editTask: async (id, data) => {
     await updateTask(id, data);
-    await get().loadGraphData();
+    get().loadGraphData();
   },
 
   removeTask: async (id) => {
-    await deleteTask(id);
+    // 乐观更新：立即从本地状态移除
+    const gd = get().graphData;
+    if (gd) {
+      const removeIds = new Set<string>();
+      const collect = (pid: string) => {
+        removeIds.add(pid);
+        gd.nodes.filter(n => n.parent_id === pid).forEach(n => collect(n.id));
+      };
+      collect(id);
+      set({
+        graphData: {
+          ...gd,
+          nodes: gd.nodes.filter(n => !removeIds.has(n.id)),
+          edges: gd.edges.filter(e => !removeIds.has(e.source) && !removeIds.has(e.target)),
+        },
+      });
+    }
     if (get().selectedNodeId === id) {
       set({ selectedNodeId: null, drawerVisible: false });
     }
-    await get().loadGraphData();
+    await deleteTask(id);
+    get().loadGraphData();
   },
 
   addMilestone: async (data) => {
     await createMilestone(data);
-    await get().loadGraphData();
+    get().loadGraphData();
   },
 
   removeMilestone: async (id) => {
-    await deleteMilestone(id);
+    // 乐观更新
+    const gd = get().graphData;
+    if (gd) {
+      set({
+        graphData: {
+          ...gd,
+          milestones: gd.milestones.filter(m => m.id !== id),
+          nodes: gd.nodes.map(n => n.milestone_id === id ? { ...n, milestone_id: undefined } : n),
+        },
+      });
+    }
     if (get().selectedNodeId === id) {
       set({ selectedNodeId: null, drawerVisible: false });
     }
-    await get().loadGraphData();
+    await deleteMilestone(id);
+    get().loadGraphData();
   },
 
   addDependency: async (data) => {
     await createDependency(data);
-    await get().loadGraphData();
+    get().loadGraphData();
   },
 
   removeDependency: async (id) => {
+    // 乐观更新
+    const gd = get().graphData;
+    if (gd) {
+      set({
+        graphData: { ...gd, edges: gd.edges.filter(e => e.id !== id) },
+      });
+    }
     await deleteDependency(id);
-    await get().loadGraphData();
+    get().loadGraphData();
   },
 
   savePosition: async (id, x, y) => {

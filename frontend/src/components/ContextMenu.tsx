@@ -3,6 +3,7 @@
  * 毛玻璃背景 + Ant Design 图标
  */
 import { useEffect, useRef } from 'react';
+import { Modal, message } from 'antd';
 import {
   EditOutlined,
   PlusOutlined,
@@ -125,9 +126,17 @@ export default function ContextMenu() {
           <div
             className="ctx-menu-item ctx-menu-item--danger"
             onClick={() => {
-              if (window.confirm('确定删除此任务及其所有子任务？')) {
-                removeTask(nodeId);
-              }
+              Modal.confirm({
+                title: '确定删除此任务？',
+                content: '将同时删除所有子任务，此操作不可撤回。',
+                okText: '删除',
+                okType: 'danger',
+                cancelText: '取消',
+                onOk: async () => {
+                  await removeTask(nodeId);
+                  message.success('任务已删除');
+                },
+              });
               hideContextMenu();
             }}
           >

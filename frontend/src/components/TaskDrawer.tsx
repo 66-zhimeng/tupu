@@ -16,6 +16,7 @@ import {
   Divider,
   message,
   Progress,
+  Modal,
 } from 'antd';
 import {
   SaveOutlined,
@@ -430,9 +431,17 @@ export default function TaskDrawer() {
                 icon={<DeleteOutlined />}
                 style={{ borderRadius: 8 }}
                 onClick={() => {
-                  if (window.confirm('确定删除此任务及其所有子任务？')) {
-                    removeTask(selectedNodeId!);
-                  }
+                  Modal.confirm({
+                    title: '确定删除此任务？',
+                    content: '将同时删除所有子任务，此操作不可撤回。',
+                    okText: '删除',
+                    okType: 'danger',
+                    cancelText: '取消',
+                    onOk: async () => {
+                      await removeTask(selectedNodeId!);
+                      message.success('任务已删除');
+                    },
+                  });
                 }}
               >
                 删除任务
@@ -509,20 +518,19 @@ export default function TaskDrawer() {
                 icon={<DeleteOutlined />}
                 block
                 style={{ borderRadius: 8 }}
-                onClick={async () => {
-                  if (window.confirm('确定删除此里程碑？关联的任务不会被删除。')) {
-                    setLoading(true);
-                    try {
+                onClick={() => {
+                  Modal.confirm({
+                    title: '确定删除此里程碑？',
+                    content: '关联的任务不会被删除，仅解除关联关系。',
+                    okText: '删除',
+                    okType: 'danger',
+                    cancelText: '取消',
+                    onOk: async () => {
                       await removeMilestone(selectedNodeId!);
                       message.success('里程碑已删除');
-                    } catch {
-                      message.error('删除失败');
-                    } finally {
-                      setLoading(false);
-                    }
-                  }
+                    },
+                  });
                 }}
-                loading={loading}
               >
                 删除里程碑
               </Button>

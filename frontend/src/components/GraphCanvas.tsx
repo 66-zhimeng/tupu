@@ -292,7 +292,7 @@ export default function GraphCanvas() {
           key: 'hover-highlight',
           degree: 1,
           state: 'highlight',
-          inactiveState: 'dim',
+          // 不设 inactiveState，悬停时其他节点保持原样
         },
         // ★ 点击创建边（click 模式：先点源节点，再点目标节点）
         {
@@ -546,8 +546,12 @@ export default function GraphCanvas() {
         return [(nd?.style as any)?.x || 0, (nd?.style as any)?.y || 0];
       }
     }
-    // 只在 node:pointerdown 设置拖拽目标
+    // 只在 node:pointerdown（左键）设置拖拽目标
     graph.on('node:pointerdown', (evt: any) => {
+      // 只在左键时启动拖拽，右键保留给 contextmenu
+      const btn = evt.button ?? evt.originalEvent?.button ?? 0;
+      if (btn !== 0) return;
+
       const gx = evt.canvas?.x ?? 0;
       const gy = evt.canvas?.y ?? 0;
       const target = findDeepestNodeAt(gx, gy);
