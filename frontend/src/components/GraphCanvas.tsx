@@ -177,6 +177,15 @@ function buildG6Data(
   const absPos = new Map<string, { x: number; y: number }>();
 
   function computeAbsPos(nodeId: string, parentX: number, parentY: number) {
+    // 已有位置的节点（被拖拽过）保持当前位置
+    const existing = existingPositions.get(nodeId);
+    if (existing) {
+      absPos.set(nodeId, existing);
+      // 用当前实际位置作为基准给子节点定位
+      const children = childrenMap.get(nodeId) || [];
+      children.forEach(c => computeAbsPos(c.id, existing.x, existing.y));
+      return;
+    }
     const rel = relPosMap.get(nodeId);
     const x = parentX + (rel?.dx || 0);
     const y = parentY + (rel?.dy || 0);
@@ -187,7 +196,8 @@ function buildG6Data(
   }
 
   topNodes.forEach(n => {
-    const pos = topPositions.get(n.id) || { x: 0, y: 0 };
+    // 优先使用父节点当前实际位置（拖拽后的位置）
+    const pos = existingPositions.get(n.id) || topPositions.get(n.id) || { x: 0, y: 0 };
     absPos.set(n.id, pos);
     const children = childrenMap.get(n.id) || [];
     children.forEach(c => computeAbsPos(c.id, pos.x, pos.y));
