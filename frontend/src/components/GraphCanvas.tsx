@@ -82,18 +82,26 @@ function buildG6Data(
     const hours = node?.computed_hours || node?.estimated_hours || 0;
 
     if (children.length === 0) {
-      // 叶子节点
+      // 叶子节点：对数增长 min=25 max=80
       const r = nodeRadius(hours);
       radiusMap.set(nodeId, r);
       return r;
     }
 
-    // 父节点：半径 = 能容纳所有子节点的最小圆（宽裕留白）
+    // 父节点：基于工时的对数公式（更大的上下限）
+    const parentMin = 60, parentMax = 300;
+    const hoursR = hours > 0
+      ? Math.min(parentMax, parentMin + Math.log2(hours + 1) * 15)
+      : parentMin;
+
+    // 同时保证能容纳所有子节点
     const childRadii = children.map(c => computeRadius(c.id));
     const totalChildArea = childRadii.reduce((sum, r) => sum + Math.PI * r * r, 0);
-    const baseR = Math.sqrt(totalChildArea / Math.PI) * 2.0 + 30; // 2x 缩放 + 30px 留白
-    const minR = Math.max(...childRadii) * 2 + 30; // 至少放下最大子节点 + 间距
-    const r = Math.max(baseR, minR, 50);
+    const fitR = Math.sqrt(totalChildArea / Math.PI) * 2.0 + 30;
+    const minFitR = Math.max(...childRadii) * 2 + 30;
+
+    // 取最大值：工时公式 vs 容纳子节点 vs 绝对最小
+    const r = Math.max(hoursR, fitR, minFitR, parentMin);
     radiusMap.set(nodeId, r);
     return r;
   }
@@ -540,78 +548,126 @@ export default function GraphCanvas() {
         graph.updateNodeData(updates);
       }
 
-      // ④ 同级碰撞检测
+      // ④ 同级碰撞检测（多轮迭代，所有兄弟对都检查）
       const allNodes = graph.getNodeData();
       if (Array.isArray(allNodes)) {
         const myParent = nd.data?.parent_id || null;
-        const myR = Number(nd.data?.nodeRadius) || 30;
         const collisionGap = 5;
-        const siblingUpdates: any[] = [];
 
-        // 获取父圆信息（用于约束推开后的位置）
-        let pBoundX = 0, pBoundY = 0, pBoundR = Infinity;
-        if (myParent) {
-          const pNd = graph.getNodeData(myParent as string);
-          if (pNd?.style) {
-            pBoundX = (pNd.style as any).x || 0;
-            pBoundY = (pNd.style as any).y || 0;
-            pBoundR = Number(pNd.data?.nodeRadius) || 200;
+        // 收集同级兄弟（含自己）
+        const siblings = allNodes.filter(n =>
+          (n.data?.parent_id || null) === myParent
+        );
+
+        if (siblings.length > 1) {
+          // 父圆边界
+          let pBoundX = 0, pBoundY = 0, pBoundR = Infinity;
+          if (myParent) {
+            const pNd = graph.getNodeData(myParent as string);
+            if (pNd?.style) {
+              pBoundX = (pNd.style as any).x || 0;
+              pBoundY = (pNd.style as any).y || 0;
+              pBoundR = Number(pNd.data?.nodeRadius) || 200;
+            }
           }
-        }
 
-        for (const sib of allNodes) {
-          if (sib.id === id) continue;
-          if ((sib.data?.parent_id || null) !== myParent) continue;
+          // 工作副本：当前位置
+          const pos = new Map<string, { x: number; y: number }>();
+          for (const s of siblings) {
+            pos.set(s.id as string, {
+              x: (s.style as any)?.x || 0,
+              y: (s.style as any)?.y || 0,
+            });
+          }
 
-          const sx = (sib.style as any)?.x || 0;
-          const sy = (sib.style as any)?.y || 0;
-          const sr = Number(sib.data?.nodeRadius) || 30;
-          const dx = sx - curX;
-          const dy = sy - curY;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          const minDist = myR + sr + collisionGap;
+          // 迭代 3 轮解决级联重叠
+          for (let iter = 0; iter < 3; iter++) {
+            for (let i = 0; i < siblings.length; i++) {
+              for (let j = i + 1; j < siblings.length; j++) {
+                const a = siblings[i];
+                const b = siblings[j];
+                const aId = a.id as string;
+                const bId = b.id as string;
+                const aPos = pos.get(aId)!;
+                const bPos = pos.get(bId)!;
+                const aR = Number(a.data?.nodeRadius) || 30;
+                const bR = Number(b.data?.nodeRadius) || 30;
 
-          if (dist < minDist && dist > 0.01) {
-            const pushScale = minDist / dist;
-            let newSx = curX + dx * pushScale;
-            let newSy = curY + dy * pushScale;
+                const dx = bPos.x - aPos.x;
+                const dy = bPos.y - aPos.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const minDist = aR + bR + collisionGap;
 
-            // 约束推开后的位置不超出父圆
-            if (myParent && pBoundR < Infinity) {
-              const pdx = newSx - pBoundX;
-              const pdy = newSy - pBoundY;
-              const pdist = Math.sqrt(pdx * pdx + pdy * pdy);
-              const maxD = pBoundR - sr - 5;
-              if (pdist > maxD && maxD > 0) {
-                const clamp = maxD / pdist;
-                newSx = pBoundX + pdx * clamp;
-                newSy = pBoundY + pdy * clamp;
+                if (dist < minDist) {
+                  const overlap = minDist - dist;
+                  let nx: number, ny: number;
+                  if (dist > 0.01) {
+                    nx = dx / dist;
+                    ny = dy / dist;
+                  } else {
+                    const angle = Math.random() * Math.PI * 2;
+                    nx = Math.cos(angle);
+                    ny = Math.sin(angle);
+                  }
+
+                  // 被拖拽的节点不动，另一方全推；其他情况各推一半
+                  const isADragged = aId === id;
+                  const isBDragged = bId === id;
+                  const pushA = isBDragged ? 1 : isADragged ? 0 : 0.5;
+                  const pushB = isADragged ? 1 : isBDragged ? 0 : 0.5;
+
+                  aPos.x -= nx * overlap * pushA;
+                  aPos.y -= ny * overlap * pushA;
+                  bPos.x += nx * overlap * pushB;
+                  bPos.y += ny * overlap * pushB;
+
+                  // 约束在父圆内
+                  if (myParent && pBoundR < Infinity) {
+                    for (const [sId, sR] of [[aId, aR], [bId, bR]] as [string, number][]) {
+                      const sp = pos.get(sId)!;
+                      const pdx = sp.x - pBoundX;
+                      const pdy = sp.y - pBoundY;
+                      const pdist = Math.sqrt(pdx * pdx + pdy * pdy);
+                      const maxD = pBoundR - sR - 5;
+                      if (pdist > maxD && maxD > 0) {
+                        const clamp = maxD / pdist;
+                        sp.x = pBoundX + pdx * clamp;
+                        sp.y = pBoundY + pdy * clamp;
+                      }
+                    }
+                  }
+                }
               }
             }
+          }
 
-            const pushDx = newSx - sx;
-            const pushDy = newSy - sy;
-            siblingUpdates.push({ id: sib.id as string, style: { x: newSx, y: newSy } });
-            for (const descId of getAllDescendants(sib.id as string)) {
+          // 应用位置变化（含子孙跟随）
+          const updates: any[] = [];
+          for (const s of siblings) {
+            const sId = s.id as string;
+            if (sId === id) continue; // 拖拽节点位置已由 G6 drag 控制
+            const oldX = (s.style as any)?.x || 0;
+            const oldY = (s.style as any)?.y || 0;
+            const newP = pos.get(sId)!;
+            const moveDx = newP.x - oldX;
+            const moveDy = newP.y - oldY;
+            if (Math.abs(moveDx) < 0.01 && Math.abs(moveDy) < 0.01) continue;
+
+            updates.push({ id: sId, style: { x: newP.x, y: newP.y } });
+            for (const descId of getAllDescendants(sId)) {
               const descNd = graph.getNodeData(descId);
-              siblingUpdates.push({
+              updates.push({
                 id: descId,
                 style: {
-                  x: ((descNd?.style as any)?.x || 0) + pushDx,
-                  y: ((descNd?.style as any)?.y || 0) + pushDy,
+                  x: ((descNd?.style as any)?.x || 0) + moveDx,
+                  y: ((descNd?.style as any)?.y || 0) + moveDy,
                 },
               });
             }
-          } else if (dist <= 0.01) {
-            const angle = Math.random() * Math.PI * 2;
-            siblingUpdates.push({
-              id: sib.id as string,
-              style: { x: sx + Math.cos(angle) * minDist, y: sy + Math.sin(angle) * minDist },
-            });
           }
-        }
 
-        if (siblingUpdates.length > 0) graph.updateNodeData(siblingUpdates);
+          if (updates.length > 0) graph.updateNodeData(updates);
+        }
       }
 
       graph.draw();
