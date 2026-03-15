@@ -475,8 +475,8 @@ export default function GraphCanvas() {
 
     // ★ 单击（延时 250ms 防双击冲突，智能选中最内层节点）
     graph.on('node:click', (evt: any) => {
-      // 连线模式下不打开编辑面板，让 create-edge 独占 click
-      if (enableConnect) return;
+      // 实时读取 store（避免闭包捕获旧值）
+      if (useGraphStore.getState().enableConnect) return;
       if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
       clickTimerRef.current = setTimeout(() => {
         const gx = evt.canvas?.x ?? evt.x ?? 0;
@@ -548,8 +548,8 @@ export default function GraphCanvas() {
       // 只在左键时启动拖拽，右键保留给 contextmenu
       const btn = evt.button ?? evt.originalEvent?.button ?? 0;
       if (btn !== 0) return;
-      // 连线模式时不启动拖拽，让 create-edge 行为正常工作
-      if (enableConnect) return;
+      // 连线模式时不启动拖拽
+      if (useGraphStore.getState().enableConnect) return;
 
       const gx = evt.canvas?.x ?? 0;
       const gy = evt.canvas?.y ?? 0;
