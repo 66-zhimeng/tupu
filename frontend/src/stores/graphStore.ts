@@ -9,6 +9,7 @@ import {
   updateTask,
   deleteTask,
   createMilestone,
+  deleteMilestone,
   createDependency,
   deleteDependency,
   updatePosition,
@@ -73,6 +74,7 @@ interface GraphStore {
   editTask: (id: string, data: TaskUpdate) => Promise<void>;
   removeTask: (id: string) => Promise<void>;
   addMilestone: (data: MilestoneCreate) => Promise<void>;
+  removeMilestone: (id: string) => Promise<void>;
   addDependency: (data: DependencyCreate) => Promise<void>;
   removeDependency: (id: string) => Promise<void>;
   savePosition: (id: string, x: number, y: number) => Promise<void>;
@@ -186,6 +188,14 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
 
   addMilestone: async (data) => {
     await createMilestone(data);
+    await get().loadGraphData();
+  },
+
+  removeMilestone: async (id) => {
+    await deleteMilestone(id);
+    if (get().selectedNodeId === id) {
+      set({ selectedNodeId: null, drawerVisible: false });
+    }
     await get().loadGraphData();
   },
 
