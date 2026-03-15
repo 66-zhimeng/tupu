@@ -41,8 +41,24 @@ function nodeRadius(hours: number): number {
 /* ===== 构建 G6 数据 ===== */
 function buildG6Data(
   graphData: ReturnType<typeof useGraphStore.getState>['graphData'],
+  existingGraph?: any, // 传入已有 graph 实例，复用节点位置
 ) {
   if (!graphData) return { nodes: [], edges: [], combos: [] };
+
+  // 收集已有节点位置（避免更新时跳动）
+  const existingPositions = new Map<string, { x: number; y: number }>();
+  if (existingGraph) {
+    try {
+      const allNodes = existingGraph.getNodeData();
+      if (Array.isArray(allNodes)) {
+        allNodes.forEach((n: any) => {
+          if (n?.style?.x != null && n?.style?.y != null) {
+            existingPositions.set(n.id, { x: n.style.x, y: n.style.y });
+          }
+        });
+      }
+    } catch { /* ignore */ }
+  }
 
   // ===== 构建树结构 =====
   const nodeMap = new Map<string, GraphNode>();
@@ -172,14 +188,21 @@ function buildG6Data(
   const nodes = graphData.nodes.map((node: GraphNode) => {
     const color = progressColor(node.computed_progress, node.status);
     const r = radiusMap.get(node.id) || 30;
-    const pos = absPos.get(node.id) || { x: 0, y: 0 };
     const isParent = childrenMap.has(node.id);
     const children = childrenMap.get(node.id) || [];
     const title = node.title.length > 8 ? node.title.slice(0, 8) + '…' : node.title;
+    const depth = getDepth(node);
+
+    // 优先使用已有位置，仅新节点用预计算位置
+    const pos = existingPositions.get(node.id) || absPos.get(node.id) || { x: 0, y: 0 };
 
     return {
       id: node.id,
-      style: { x: pos.x, y: pos.y },
+      style: {
+        x: pos.x,
+        y: pos.y,
+        zIndex: depth * 10 + 10, // 子节点层级高于父节点，确保可点击
+      },
       data: {
         ...node,
         nodeRadius: r,
@@ -187,7 +210,7 @@ function buildG6Data(
         label: title,
         isParent,
         childCount: children.length,
-        depth: getDepth(node),
+        depth,
       },
     };
   });
@@ -431,36 +454,88 @@ export default function GraphCanvas() {
 
     graph.on('canvas:click', () => hideContextMenu());
 
-    // ★ 拖拽约束：子节点不能超出父圆边界
+    // ★ 拖拽逻辑：父节点带动子节点 + 子节点约束在父圆内
+    const _lastDragPos = new Map<string, { x: number; y: number }>();
+
+    // 递归获取所有子孙节点 ID
+    function getAllDescendants(nodeId: string): string[] {
+      const result: string[] = [];
+      const allNodes = graph.getNodeData();
+      if (!Array.isArray(allNodes)) return result;
+      const stack = [nodeId];
+      while (stack.length > 0) {
+        const pid = stack.pop()!;
+        for (const n of allNodes) {
+          if (n.data?.parent_id === pid && n.id !== nodeId) {
+            result.push(n.id as string);
+            stack.push(n.id as string);
+          }
+        }
+      }
+      return result;
+    }
+
+    graph.on('node:dragstart', (evt: any) => {
+      const id = evt.target?.id;
+      if (!id) return;
+      const nd = graph.getNodeData(id);
+      if (!nd?.style) return;
+      _lastDragPos.set(id, { x: (nd.style as any).x || 0, y: (nd.style as any).y || 0 });
+    });
+
     graph.on('node:drag', (evt: any) => {
       const id = evt.target?.id;
       if (!id) return;
       const nd = graph.getNodeData(id);
-      if (!nd?.data?.parent_id) return; // 顶层节点不约束
+      if (!nd?.style) return;
 
-      const parentId = nd.data.parent_id as string;
-      const parentNd = graph.getNodeData(parentId);
-      if (!parentNd?.style) return;
+      const curX = (nd.style as any).x || 0;
+      const curY = (nd.style as any).y || 0;
+      const last = _lastDragPos.get(id) || { x: curX, y: curY };
+      const moveX = curX - last.x;
+      const moveY = curY - last.y;
+      _lastDragPos.set(id, { x: curX, y: curY });
 
-      const px = (parentNd.style as any).x || 0;
-      const py = (parentNd.style as any).y || 0;
-      const parentR = Number(parentNd.data?.nodeRadius) || 60;
-      const childR = Number(nd.data?.nodeRadius) || 30;
+      // 如果有子节点 → 带动所有子孙一起移动
+      const descendants = getAllDescendants(id);
+      if (descendants.length > 0 && (moveX !== 0 || moveY !== 0)) {
+        const updates = descendants.map(cid => {
+          const cnd = graph.getNodeData(cid);
+          return {
+            id: cid,
+            style: {
+              x: ((cnd?.style as any)?.x || 0) + moveX,
+              y: ((cnd?.style as any)?.y || 0) + moveY,
+            },
+          };
+        });
+        graph.updateNodeData(updates);
+        graph.draw();
+      }
 
-      const cx = (nd.style as any).x || 0;
-      const cy = (nd.style as any).y || 0;
-      const dx = cx - px;
-      const dy = cy - py;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      const maxDist = parentR - childR - 5; // 子圆边缘不超出父圆边缘
+      // 如果是子节点 → 约束在父圆内
+      if (nd.data?.parent_id) {
+        const parentId = nd.data.parent_id as string;
+        const parentNd = graph.getNodeData(parentId);
+        if (parentNd?.style) {
+          const px = (parentNd.style as any).x || 0;
+          const py = (parentNd.style as any).y || 0;
+          const parentR = Number(parentNd.data?.nodeRadius) || 60;
+          const childR = Number(nd.data?.nodeRadius) || 30;
+          const dx = curX - px;
+          const dy = curY - py;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const maxDist = parentR - childR - 5;
 
-      if (dist > maxDist && maxDist > 0) {
-        // 约束回父圆边界
-        const scale = maxDist / dist;
-        graph.updateNodeData([{
-          id,
-          style: { x: px + dx * scale, y: py + dy * scale },
-        }]);
+          if (dist > maxDist && maxDist > 0) {
+            const scale = maxDist / dist;
+            const clampedX = px + dx * scale;
+            const clampedY = py + dy * scale;
+            graph.updateNodeData([{ id, style: { x: clampedX, y: clampedY } }]);
+            _lastDragPos.set(id, { x: clampedX, y: clampedY });
+            graph.draw();
+          }
+        }
       }
     });
 
@@ -483,8 +558,8 @@ export default function GraphCanvas() {
   // 数据变化 → 更新画布
   useEffect(() => {
     if (!graphRef.current || !graphData) return;
-    graphRef.current.setData(buildG6Data(graphData));
-    graphRef.current.render();
+    graphRef.current.setData(buildG6Data(graphData, graphRef.current));
+    graphRef.current.draw(); // draw 而非 render，避免重新布局
   }, [graphData]);
 
   const milestones = graphData?.milestones || [];
