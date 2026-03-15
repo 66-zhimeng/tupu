@@ -33,9 +33,8 @@ function progressColor(pct: number, status: string): string {
 
 /** 节点圆圈半径（对数增长，有最小尺寸） */
 function nodeRadius(hours: number): number {
-  const min = 25, max = 80;
+  const min = 55, max = 100;
   if (!hours || hours <= 0) return min;
-  // 对数增长：log2(hours+1) * 8，从25px起步
   return Math.min(max, min + Math.log2(hours + 1) * 8);
 }
 
@@ -89,7 +88,7 @@ function buildG6Data(
     }
 
     // 父节点：基于工时的对数公式（更大的上下限）
-    const parentMin = 60, parentMax = 300;
+    const parentMin = 80, parentMax = 300;
     const hoursR = hours > 0
       ? Math.min(parentMax, parentMin + Math.log2(hours + 1) * 15)
       : parentMin;
@@ -199,7 +198,8 @@ function buildG6Data(
     const r = radiusMap.get(node.id) || 30;
     const isParent = childrenMap.has(node.id);
     const children = childrenMap.get(node.id) || [];
-    const title = node.title.length > 8 ? node.title.slice(0, 8) + '…' : node.title;
+    const maxChars = 20;
+    const title = node.title.length > maxChars ? node.title.slice(0, maxChars) + '…' : node.title;
     const depth = getDepth(node);
 
     // 优先使用已有位置，仅新节点用预计算位置
@@ -356,19 +356,25 @@ export default function GraphCanvas() {
           lineWidth: (d: any) => d.data?.isParent ? 1.5 : 2.5,
           lineDash: (d: any) => d.data?.isParent ? [6, 4] : undefined,
           opacity: (d: any) => (d.data?.status === '已取消' ? 0.4 : 1),
-          // ★ 父节点只有边框响应事件，填充区域点击穿透到子节点
-          pointerEvents: (d: any) => d.data?.isParent ? 'stroke' : 'auto',
+          // 所有节点填充区域都响应事件，靠 zIndex 区分父子
+          pointerEvents: 'auto',
           shadowColor: 'rgba(0, 0, 0, 0.06)',
           shadowBlur: 4,
           shadowOffsetY: 1,
 
-          // 标签
+          // 标签：大小与节点尺寸成正比，加粗加深
           labelText: (d: any) => d.data?.label || '',
-          labelFill: '#1E293B',
-          labelFontSize: (d: any) => d.data?.isParent ? 13 : 11,
-          labelFontWeight: 600,
-          // 父节点标签在顶部，叶子标签在中心
-          labelPlacement: (d: any) => d.data?.isParent ? 'top' : 'center',
+          labelFill: (d: any) => d.data?.isParent ? '#0F172A' : '#1E293B',
+          labelFontSize: (d: any) => {
+            const r = d.data?.nodeRadius || 55;
+            return Math.max(11, Math.min(18, Math.round(r * 0.25)));
+          },
+          labelFontWeight: (d: any) => d.data?.isParent ? 700 : 600,
+          // 所有节点标签在中心，自动换行
+          labelPlacement: 'center',
+          labelWordWrap: true,
+          labelMaxWidth: (d: any) => (d.data?.nodeRadius || 55) * 1.6,
+          labelMaxLines: 3,
           labelFontFamily: "'Inter', sans-serif",
 
           // 连接端口
@@ -435,25 +441,66 @@ export default function GraphCanvas() {
     graphRef.current = graph;
     setGraphInstance(graph);
 
-    // ★ 单击（延时 250ms 防双击冲突）
+    // ★ 辅助函数：在 graph 坐标处找到最内层（depth 最深、半径最小）的节点
+    function findDeepestNodeAt(gx: number, gy: number): string | null {
+      const allNodes = graph.getNodeData();
+      if (!Array.isArray(allNodes)) return null;
+
+      let bestId: string | null = null;
+      let bestDepth = -1;
+      let bestRadius = Infinity;
+
+      for (const n of allNodes) {
+        // 获取节点实际渲染位置
+        let nx = 0, ny = 0;
+        try {
+          const pos = graph.getElementPosition(n.id as string);
+          nx = pos[0]; ny = pos[1];
+        } catch {
+          nx = (n.style as any)?.x || 0;
+          ny = (n.style as any)?.y || 0;
+        }
+        const nr = Number(n.data?.nodeRadius) || 55;
+        const dx = gx - nx;
+        const dy = gy - ny;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist <= nr) {
+          const depth = Number(n.data?.depth) || 0;
+          // 优先选 depth 更深的；depth 相同优先选半径更小的（子节点更小）
+          if (depth > bestDepth || (depth === bestDepth && nr < bestRadius)) {
+            bestDepth = depth;
+            bestRadius = nr;
+            bestId = n.id as string;
+          }
+        }
+      }
+      return bestId;
+    }
+
+    // ★ 单击（延时 250ms 防双击冲突，智能选中最内层节点）
     graph.on('node:click', (evt: any) => {
-      const id = evt.target?.id;
-      if (!id) return;
       if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
       clickTimerRef.current = setTimeout(() => {
-        selectNode(id, 'task');
+        const gx = evt.canvas?.x ?? evt.x ?? 0;
+        const gy = evt.canvas?.y ?? evt.y ?? 0;
+        const deepest = findDeepestNodeAt(gx, gy);
+        if (deepest) selectNode(deepest, 'task');
         clickTimerRef.current = null;
       }, 250);
     });
 
-    // 右键菜单
+    // 右键菜单（同样智能定位最深节点）
     graph.on('node:contextmenu', (evt: any) => {
       const e = evt.originalEvent || evt;
       if (e?.preventDefault) e.preventDefault();
       if (e?.stopPropagation) e.stopPropagation();
-      const id = evt.target?.id;
-      if (!id) return;
-      showContextMenu(e?.clientX || 0, e?.clientY || 0, evt.canvas?.x || 0, evt.canvas?.y || 0, id, 'task');
+      const canvasX = evt.canvas?.x ?? evt.x ?? 0;
+      const canvasY = evt.canvas?.y ?? evt.y ?? 0;
+      const deepest = findDeepestNodeAt(canvasX, canvasY);
+      if (deepest) {
+        showContextMenu(e?.clientX || 0, e?.clientY || 0, canvasX, canvasY, deepest, 'task');
+      }
     });
 
     graph.on('canvas:contextmenu', (evt: any) => {
