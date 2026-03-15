@@ -12,6 +12,7 @@
  */
 import { useEffect, useRef } from 'react';
 import { Graph } from '@antv/g6';
+import { message } from 'antd';
 import { useGraphStore } from '../stores/graphStore';
 import type { GraphNode, GraphMilestone } from '../services/api';
 import './GraphCanvas.css';
@@ -292,31 +293,8 @@ export default function GraphCanvas() {
           key: 'hover-highlight',
           degree: 1,
           state: 'highlight',
-          // 不设 inactiveState，悬停时其他节点保持原样
         },
-        // ★ 点击创建边（click 模式：先点源节点，再点目标节点）
-        {
-          type: 'create-edge',
-          key: 'create-edge',
-          trigger: 'click',
-          enable: false,
-          style: {
-            stroke: '#3B82F6',
-            lineWidth: 2,
-            lineDash: [6, 4],
-            endArrow: true,
-          },
-          onCreate: (edge: any) => {
-            const source = edge.source;
-            const target = edge.target;
-            if (source && target && source !== target) {
-              addDependency({
-                source_task_id: source,
-                target_task_id: target,
-              });
-            }
-          },
-        },
+        // 不使用 G6 create-edge（坐标偏移 bug），改用自定义两步连线
       ],
 
       // 插件
@@ -484,10 +462,39 @@ export default function GraphCanvas() {
       return bestId;
     }
 
-    // ★ 单击（延时 250ms 防双击冲突，智能选中最内层节点）
+    // ★ 自定义两步连线模式（替代 G6 create-edge）
+    let _connectSource: string | null = null;
+
+    // ★ 单击节点
     graph.on('node:click', (evt: any) => {
-      // 实时读取 store（避免闭包捕获旧值）
-      if (useGraphStore.getState().enableConnect) return;
+      const store = useGraphStore.getState();
+
+      // 连线模式
+      if (store.enableConnect) {
+        const gx = evt.canvas?.x ?? evt.x ?? 0;
+        const gy = evt.canvas?.y ?? evt.y ?? 0;
+        const clicked = findDeepestNodeAt(gx, gy) || (evt.target?.id as string);
+        if (!clicked) return;
+
+        if (!_connectSource) {
+          // 第一步：记录源节点
+          _connectSource = clicked;
+          message.info('请点击目标节点完成连线');
+        } else {
+          // 第二步：创建连线
+          if (clicked !== _connectSource) {
+            addDependency({
+              source_task_id: _connectSource,
+              target_task_id: clicked,
+            });
+            message.success('连线已创建');
+          }
+          _connectSource = null;
+        }
+        return;
+      }
+
+      // 正常模式：打开编辑面板
       if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
       clickTimerRef.current = setTimeout(() => {
         const gx = evt.canvas?.x ?? evt.x ?? 0;
@@ -498,6 +505,11 @@ export default function GraphCanvas() {
       }, 250);
     });
 
+    // 点击空白取消连线
+    graph.on('canvas:click', () => {
+      hideContextMenu();
+      _connectSource = null;
+    });
     // 右键菜单（同样智能定位最深节点）
     graph.on('node:contextmenu', (evt: any) => {
       const e = evt.originalEvent || evt;

@@ -113,18 +113,7 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
   toggleConnect: () => {
     const next = !get().enableConnect;
     set({ enableConnect: next });
-    // 动态切换 create-edge 行为
-    const graph = get().graphInstance;
-    if (graph) {
-      graph.updateBehavior({ key: 'create-edge', enable: next });
-      // 重置 canvas 光标（G6 内部会设置行内 cursor，CSS 类无法覆盖）
-      const canvas = (graph as any).getCanvas?.();
-      const el = canvas?.getContextService?.()?.getDomElement?.()
-        || document.querySelector('#graph-canvas canvas');
-      if (el) {
-        (el as HTMLElement).style.cursor = next ? 'crosshair' : '';
-      }
-    }
+    // 光标通过 CSS .connect-mode 类控制，不再依赖 G6 create-edge 行为
   },
 
   // ===== 画布缩放控制 =====

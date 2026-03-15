@@ -8,9 +8,14 @@
   flex-direction: column;
 }
 
-/* 连线模式 */
-.canvas-wrapper.connect-mode .canvas-container {
-  cursor: crosshair;
+/* 连线模式 — 强制所有子元素（包括 canvas）为十字光标 */
+.canvas-wrapper.connect-mode .canvas-container,
+.canvas-wrapper.connect-mode .canvas-container * {
+  cursor: crosshair !important;
+}
+/* 非连线模式 — 确保恢复默认光标 */
+.canvas-wrapper:not(.connect-mode) .canvas-container canvas {
+  cursor: grab !important;
 }
 
 /* 画布容器 */
