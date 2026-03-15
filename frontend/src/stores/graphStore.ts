@@ -117,6 +117,13 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
     const graph = get().graphInstance;
     if (graph) {
       graph.updateBehavior({ key: 'create-edge', enable: next });
+      // 重置 canvas 光标（G6 内部会设置行内 cursor，CSS 类无法覆盖）
+      const canvas = (graph as any).getCanvas?.();
+      const el = canvas?.getContextService?.()?.getDomElement?.()
+        || document.querySelector('#graph-canvas canvas');
+      if (el) {
+        (el as HTMLElement).style.cursor = next ? 'crosshair' : '';
+      }
     }
   },
 

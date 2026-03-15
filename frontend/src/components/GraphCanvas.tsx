@@ -377,8 +377,19 @@ export default function GraphCanvas() {
           labelMaxLines: 3,
           labelFontFamily: "'Inter', sans-serif",
 
-          // 不使用固定端口，G6 circle 节点自动计算边线与圆边缘交点
-          // 实现从圆边缘任意位置连线
+          // 圆形边缘均匀分布的不可见端口，供 create-edge 使用
+          port: true,
+          ports: Array.from({ length: 12 }, (_, i) => {
+            const angle = (i / 12) * Math.PI * 2;
+            return {
+              key: `p${i}`,
+              placement: [
+                0.5 + 0.5 * Math.cos(angle),
+                0.5 + 0.5 * Math.sin(angle),
+              ] as [number, number],
+              r: 0,  // 不可见
+            };
+          }),
         },
         state: {
           highlight: {
