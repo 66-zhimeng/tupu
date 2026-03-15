@@ -377,14 +377,8 @@ export default function GraphCanvas() {
           labelMaxLines: 3,
           labelFontFamily: "'Inter', sans-serif",
 
-          // 连接端口
-          port: true,
-          ports: [
-            { key: 'top', placement: [0.5, 0], r: 3, fill: '#3B82F6', stroke: '#fff', lineWidth: 1 },
-            { key: 'right', placement: [1, 0.5], r: 3, fill: '#3B82F6', stroke: '#fff', lineWidth: 1 },
-            { key: 'bottom', placement: [0.5, 1], r: 3, fill: '#3B82F6', stroke: '#fff', lineWidth: 1 },
-            { key: 'left', placement: [0, 0.5], r: 3, fill: '#3B82F6', stroke: '#fff', lineWidth: 1 },
-          ],
+          // 不使用固定端口，G6 circle 节点自动计算边线与圆边缘交点
+          // 实现从圆边缘任意位置连线
         },
         state: {
           highlight: {
@@ -481,6 +475,8 @@ export default function GraphCanvas() {
 
     // ★ 单击（延时 250ms 防双击冲突，智能选中最内层节点）
     graph.on('node:click', (evt: any) => {
+      // 连线模式下不打开编辑面板，让 create-edge 独占 click
+      if (enableConnect) return;
       if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
       clickTimerRef.current = setTimeout(() => {
         const gx = evt.canvas?.x ?? evt.x ?? 0;
