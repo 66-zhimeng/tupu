@@ -403,12 +403,13 @@ export default function GraphCanvas() {
       edge: {
         type: 'cubic',
         style: {
-          stroke: (d: any) => (d.data?.edgeType === 'iterative' ? '#F59E0B' : '#94A3B8'),
-          lineWidth: (d: any) => (d.data?.edgeType === 'iterative' ? 2.5 : 1.5),
+          stroke: (d: any) => (d.data?.edgeType === 'iterative' ? '#F59E0B' : '#64748B'),
+          lineWidth: (d: any) => (d.data?.edgeType === 'iterative' ? 3 : 2.5),
           lineDash: (d: any) => (d.data?.edgeType === 'iterative' ? [6, 4] : undefined),
-          opacity: 0.6,
+          opacity: 0.85,
           endArrow: true,
-          endArrowSize: 6,
+          endArrowSize: 10,
+          endArrowFill: (d: any) => (d.data?.edgeType === 'iterative' ? '#F59E0B' : '#64748B'),
           labelText: (d: any) => {
             if (d.data?.edgeType === 'iterative' && d.data?.iterationCount > 0) {
               return `×${d.data.iterationCount}`;
@@ -551,6 +552,8 @@ export default function GraphCanvas() {
       // 只在左键时启动拖拽，右键保留给 contextmenu
       const btn = evt.button ?? evt.originalEvent?.button ?? 0;
       if (btn !== 0) return;
+      // 连线模式时不启动拖拽，让 create-edge 行为正常工作
+      if (enableConnect) return;
 
       const gx = evt.canvas?.x ?? 0;
       const gy = evt.canvas?.y ?? 0;

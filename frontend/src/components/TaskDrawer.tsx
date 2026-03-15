@@ -362,10 +362,10 @@ export default function TaskDrawer() {
                 </Form.Item>
               </Form>
 
-              {/* 依赖关系 */}
+              {/* 阶段关系 */}
               {taskDeps.length > 0 && (
                 <>
-                  <Divider style={{ fontSize: 13 }}>依赖关系</Divider>
+                  <Divider style={{ fontSize: 13 }}>阶段关系</Divider>
                   {taskDeps.map(dep => {
                     const isSource = dep.source === selectedNodeId;
                     const other = graphData?.nodes.find(
@@ -386,7 +386,7 @@ export default function TaskDrawer() {
                           {isSource
                             ? <ArrowRightOutlined style={{ color: '#3B82F6' }} />
                             : <ArrowLeftOutlined style={{ color: '#10B981' }} />}
-                          <span>{isSource ? '依赖' : '被依赖'}</span>
+                          <span>{isSource ? '下一阶段' : '上一阶段'}</span>
                           <Tag>{other?.title || '未知'}</Tag>
                           {dep.is_iterative && (
                             <Tag color="orange">迭代×{dep.iteration_count}</Tag>
