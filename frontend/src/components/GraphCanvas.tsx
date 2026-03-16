@@ -41,30 +41,41 @@ function buildPieSvgUrl(slices: { completed: boolean; status: string }[], radius
   if (slices.length === 0) return '';
   const size = radius * 2;
   const cx = radius, cy = radius;
+  const r = radius - 2;          // 留 2px 内边距避免裁切
   const n = slices.length;
-  const gapDeg = n > 1 ? 3 : 0;
-  const sliceDeg = 360 / n;
+
+  // 颜色方案 — 高对比度，一目了然
+  const COLOR_DONE = '#10B981'; // 鲜绿
+  const COLOR_TODO = '#CBD5E1'; // 蓝灰（偏深）
+  const COLOR_CANCEL = '#E2E8F0'; // 浅灰
 
   let paths = '';
-  for (let i = 0; i < n; i++) {
-    const s = slices[i];
-    const fill = (s.completed || s.status === '已完成')
-      ? 'rgba(16,185,129,0.50)'
-      : s.status === '已取消'
-        ? 'rgba(180,180,180,0.20)'
-        : 'rgba(200,210,225,0.18)';
+  if (n === 1) {
+    // 单个子任务 → 画整圆
+    const s = slices[0];
+    const fill = (s.completed || s.status === '已完成') ? COLOR_DONE
+      : s.status === '已取消' ? COLOR_CANCEL : COLOR_TODO;
+    paths = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${fill}" />`;
+  } else {
+    const gapDeg = 2;
+    const sliceDeg = 360 / n;
+    for (let i = 0; i < n; i++) {
+      const s = slices[i];
+      const fill = (s.completed || s.status === '已完成') ? COLOR_DONE
+        : s.status === '已取消' ? COLOR_CANCEL : COLOR_TODO;
 
-    const startDeg = -90 + i * sliceDeg;
-    const endDeg = startDeg + sliceDeg - gapDeg;
-    const startRad = (startDeg * Math.PI) / 180;
-    const endRad = (endDeg * Math.PI) / 180;
-    const x1 = cx + radius * Math.cos(startRad);
-    const y1 = cy + radius * Math.sin(startRad);
-    const x2 = cx + radius * Math.cos(endRad);
-    const y2 = cy + radius * Math.sin(endRad);
-    const largeArc = (endDeg - startDeg) > 180 ? 1 : 0;
+      const startDeg = -90 + i * sliceDeg + gapDeg / 2;
+      const endDeg = -90 + (i + 1) * sliceDeg - gapDeg / 2;
+      const startRad = (startDeg * Math.PI) / 180;
+      const endRad = (endDeg * Math.PI) / 180;
+      const x1 = cx + r * Math.cos(startRad);
+      const y1 = cy + r * Math.sin(startRad);
+      const x2 = cx + r * Math.cos(endRad);
+      const y2 = cy + r * Math.sin(endRad);
+      const largeArc = (endDeg - startDeg) > 180 ? 1 : 0;
 
-    paths += `<path d="M ${cx} ${cy} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2} Z" fill="${fill}" />`;
+      paths += `<path d="M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z" fill="${fill}" stroke="white" stroke-width="1.5" />`;
+    }
   }
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${paths}</svg>`;
