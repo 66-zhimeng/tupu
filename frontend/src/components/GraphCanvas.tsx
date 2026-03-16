@@ -36,26 +36,28 @@ function nodeRadius(hours: number): number {
   return Math.min(max, min + Math.log2(hours + 1) * 8);
 }
 
-/** 生成扇形饼图 SVG data URL（嵌入 G6 节点 icon，零残影） */
+/** 生成环形饼图 SVG data URL（中间留空显示标签文字） */
 function buildPieSvgUrl(slices: { completed: boolean; status: string }[], radius: number): string {
   if (slices.length === 0) return '';
   const size = radius * 2;
   const cx = radius, cy = radius;
-  const r = radius - 2;          // 留 2px 内边距避免裁切
+  const rOuter = radius - 2;          // 外半径
+  const rInner = radius * 0.45;       // 内半径 — 留出中心给文字
   const n = slices.length;
 
-  // 颜色方案 — 高对比度，一目了然
+  // 颜色方案 — 高对比度
   const COLOR_DONE = '#10B981'; // 鲜绿
-  const COLOR_TODO = '#CBD5E1'; // 蓝灰（偏深）
+  const COLOR_TODO = '#CBD5E1'; // 蓝灰
   const COLOR_CANCEL = '#E2E8F0'; // 浅灰
 
   let paths = '';
   if (n === 1) {
-    // 单个子任务 → 画整圆
     const s = slices[0];
     const fill = (s.completed || s.status === '已完成') ? COLOR_DONE
       : s.status === '已取消' ? COLOR_CANCEL : COLOR_TODO;
-    paths = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${fill}" />`;
+    // 外环 + 白色内圆
+    paths = `<circle cx="${cx}" cy="${cy}" r="${rOuter}" fill="${fill}" />`;
+    paths += `<circle cx="${cx}" cy="${cy}" r="${rInner}" fill="white" />`;
   } else {
     const gapDeg = 2;
     const sliceDeg = 360 / n;
@@ -68,13 +70,22 @@ function buildPieSvgUrl(slices: { completed: boolean; status: string }[], radius
       const endDeg = -90 + (i + 1) * sliceDeg - gapDeg / 2;
       const startRad = (startDeg * Math.PI) / 180;
       const endRad = (endDeg * Math.PI) / 180;
-      const x1 = cx + r * Math.cos(startRad);
-      const y1 = cy + r * Math.sin(startRad);
-      const x2 = cx + r * Math.cos(endRad);
-      const y2 = cy + r * Math.sin(endRad);
+
+      // 外弧端点
+      const ox1 = cx + rOuter * Math.cos(startRad);
+      const oy1 = cy + rOuter * Math.sin(startRad);
+      const ox2 = cx + rOuter * Math.cos(endRad);
+      const oy2 = cy + rOuter * Math.sin(endRad);
+      // 内弧端点（反向）
+      const ix1 = cx + rInner * Math.cos(endRad);
+      const iy1 = cy + rInner * Math.sin(endRad);
+      const ix2 = cx + rInner * Math.cos(startRad);
+      const iy2 = cy + rInner * Math.sin(startRad);
+
       const largeArc = (endDeg - startDeg) > 180 ? 1 : 0;
 
-      paths += `<path d="M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z" fill="${fill}" stroke="white" stroke-width="1.5" />`;
+      // 环形扇区：外弧 → 直线到内弧 → 内弧（反方向） → 闭合
+      paths += `<path d="M ${ox1} ${oy1} A ${rOuter} ${rOuter} 0 ${largeArc} 1 ${ox2} ${oy2} L ${ix1} ${iy1} A ${rInner} ${rInner} 0 ${largeArc} 0 ${ix2} ${iy2} Z" fill="${fill}" stroke="white" stroke-width="1.5" />`;
     }
   }
 
@@ -247,6 +258,10 @@ export default function GraphCanvas() {
       animation: true,
 
       behaviors: [
+        {
+          type: 'drag-element',
+          key: 'drag-node',
+        },
         { type: 'drag-canvas', key: 'drag-canvas' },
         'zoom-canvas',
         {
