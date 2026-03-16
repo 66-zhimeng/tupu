@@ -14,6 +14,8 @@ class LLMConfigCreate(BaseModel):
     api_key: Optional[str] = Field(None, description="API Key")
     base_url: str = Field("https://api.openai.com/v1", description="API Base URL")
     model_name: str = Field("gpt-4o-mini", description="模型名称")
+    temperature: float = Field(0.7, ge=0.0, le=2.0, description="温度")
+    enable_thinking: bool = Field(False, description="启用思考/推理模式")
 
 
 class LLMConfigResponse(BaseModel):
@@ -24,6 +26,8 @@ class LLMConfigResponse(BaseModel):
     base_url: str
     model_name: str
     is_active: bool
+    temperature: float = 0.7
+    enable_thinking: bool = False
 
     model_config = {"from_attributes": True}
 

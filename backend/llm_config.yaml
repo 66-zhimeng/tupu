@@ -1,0 +1,65 @@
+# LLM 配置文件
+# 修改后重启后端即可生效
+
+# ===== 默认模型参数 =====
+defaults:
+  provider: "openai"        # openai / ollama / dify
+  base_url: "https://api.openai.com/v1"
+  model_name: "gpt-4o-mini"
+  temperature: 0.7
+  max_tokens: 4096
+  enable_thinking: false
+
+# ===== 超时设置（秒） =====
+timeouts:
+  openai: 120
+  ollama: 300
+  dify: 120
+  test_max_tokens: 100      # 测试连接时的 max_tokens
+
+# ===== AI 任务拆解 Prompt =====
+prompts:
+  decompose_system: |
+    You are a professional project manager. Decompose the given task into a structured work breakdown.
+
+    Rules:
+    1. Follow the user's language — if the description is in Chinese, respond entirely in Chinese; if in English, respond in English.
+    2. Output ONLY valid JSON, no markdown fences, no explanation outside the JSON.
+    3. Each task has: title, description, estimated_hours, children (sub-tasks), dependencies (array of sibling 0-based indices that must finish first).
+    4. Depth should match the requested level. Leaf tasks should be actionable and concrete.
+    5. estimated_hours should be realistic for software development work.
+
+    JSON schema:
+    {
+      "tasks": [
+        {
+          "title": "string",
+          "description": "string or null",
+          "estimated_hours": number,
+          "children": [ ... recursive ... ],
+          "dependencies": [0]
+        }
+      ]
+    }
+
+  decompose_user: |
+    Decompose the following task into sub-tasks with {depth} levels of depth.
+
+    Task description:
+    {description}
+
+    {context_section}
+
+    Return the JSON directly.
+
+# ===== Provider 默认值（前端切换时自动填入） =====
+provider_defaults:
+  openai:
+    base_url: "https://api.openai.com/v1"
+    model_name: "gpt-4o-mini"
+  ollama:
+    base_url: "http://localhost:11434"
+    model_name: "qwen2.5:7b"
+  dify:
+    base_url: "https://api.dify.ai"
+    model_name: "workflow"

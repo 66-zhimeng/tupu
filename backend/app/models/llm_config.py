@@ -36,6 +36,14 @@ class LLMConfig(Base):
         Boolean, default=True, nullable=False,
         comment="是否为当前激活的配置"
     )
+    temperature: Mapped[float] = mapped_column(
+        default=0.7, nullable=False,
+        comment="模型温度 0.0-2.0"
+    )
+    enable_thinking: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False,
+        comment="是否启用思考/推理模式"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )

@@ -17,6 +17,8 @@ export interface LLMConfig {
     base_url: string;
     model_name: string;
     is_active: boolean;
+    temperature: number;
+    enable_thinking: boolean;
 }
 
 export interface LLMConfigCreate {
@@ -24,6 +26,8 @@ export interface LLMConfigCreate {
     api_key?: string;
     base_url: string;
     model_name: string;
+    temperature: number;
+    enable_thinking: boolean;
 }
 
 export interface DecomposeTaskNode {

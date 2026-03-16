@@ -29,6 +29,8 @@ async def get_llm_config(db: AsyncSession = Depends(get_db)):
         base_url=config.base_url,
         model_name=config.model_name,
         is_active=config.is_active,
+        temperature=config.temperature,
+        enable_thinking=config.enable_thinking,
     )
 
 
@@ -43,6 +45,8 @@ async def save_llm_config(data: LLMConfigCreate, db: AsyncSession = Depends(get_
         base_url=config.base_url,
         model_name=config.model_name,
         is_active=config.is_active,
+        temperature=config.temperature,
+        enable_thinking=config.enable_thinking,
     )
 
 

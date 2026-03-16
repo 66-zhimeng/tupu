@@ -6,6 +6,9 @@ import time
 import uuid
 import re
 from typing import Optional, List, Dict, Any
+from pathlib import Path
+
+import yaml
 
 import httpx
 from sqlalchemy import select, update
@@ -21,38 +24,25 @@ from app.schemas.llm import (
 )
 
 
-# ===== Prompt 模板 =====
+# ===== 加载外部配置 =====
 
-DECOMPOSE_SYSTEM_PROMPT = """You are a professional project manager. Decompose the given task into a structured work breakdown.
+_CONFIG_PATH = Path(__file__).resolve().parent.parent.parent / "llm_config.yaml"
+_cached_config: Optional[dict] = None
 
-Rules:
-1. Follow the user's language — if the description is in Chinese, respond entirely in Chinese; if in English, respond in English.
-2. Output ONLY valid JSON, no markdown fences, no explanation outside the JSON.
-3. Each task has: title, description, estimated_hours, children (sub-tasks), dependencies (array of sibling 0-based indices that must finish first).
-4. Depth should match the requested level. Leaf tasks should be actionable and concrete.
-5. estimated_hours should be realistic for software development work.
+def _load_config() -> dict:
+    """加载 llm_config.yaml（带缓存）"""
+    global _cached_config
+    if _cached_config is None:
+        with open(_CONFIG_PATH, "r", encoding="utf-8") as f:
+            _cached_config = yaml.safe_load(f)
+        logger.info(f"已加载 LLM 配置: {_CONFIG_PATH}")
+    return _cached_config
 
-JSON schema:
-{
-  "tasks": [
-    {
-      "title": "string",
-      "description": "string or null",
-      "estimated_hours": number,
-      "children": [ ... recursive ... ],
-      "dependencies": [0]  // this task depends on tasks[0] finishing first
-    }
-  ]
-}"""
-
-DECOMPOSE_USER_TEMPLATE = """Decompose the following task into sub-tasks with {depth} levels of depth.
-
-Task description:
-{description}
-
-{context_section}
-
-Return the JSON directly."""
+def reload_config():
+    """强制重新加载配置"""
+    global _cached_config
+    _cached_config = None
+    return _load_config()
 
 
 class LLMService:
@@ -81,6 +71,8 @@ class LLMService:
             api_key=data.api_key,
             base_url=data.base_url.rstrip("/"),
             model_name=data.model_name,
+            temperature=data.temperature,
+            enable_thinking=data.enable_thinking,
             is_active=True,
         )
         db.add(config)
@@ -120,6 +112,25 @@ class LLMService:
             raise ValueError(f"不支持的 LLM 类型: {provider}")
 
     @staticmethod
+    def _build_openai_url(base_url: str) -> str:
+        """构建 OpenAI chat/completions 完整 URL"""
+        base = base_url.rstrip("/")
+        # 如果已经以 /v1 结尾，直接拼接
+        if base.endswith("/v1"):
+            return f"{base}/chat/completions"
+        # 如果 URL 里包含 /v1/ ，截取并拼接
+        if "/v1" in base:
+            return f"{base}/chat/completions"
+        # 否则自动加 /v1
+        return f"{base}/v1/chat/completions"
+
+    @staticmethod
+    def _strip_thinking(text: str) -> str:
+        """移除 <thinking>...</thinking> 标签内容"""
+        cleaned = re.sub(r'<thinking>.*?</thinking>', '', text, flags=re.DOTALL)
+        return cleaned.strip()
+
+    @staticmethod
     async def _call_openai(
         config: LLMConfig,
         system_prompt: str,
@@ -132,25 +143,31 @@ class LLMService:
         if config.api_key:
             headers["Authorization"] = f"Bearer {config.api_key}"
 
-        payload = {
+        payload: dict = {
             "model": config.model_name,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            "temperature": temperature,
             "max_tokens": max_tokens,
         }
+        # thinking 模型不能设置 temperature
+        if not getattr(config, 'enable_thinking', False):
+            payload["temperature"] = temperature
 
-        base_url = config.base_url.rstrip("/")
-        url = f"{base_url}/chat/completions"
+        url = LLMService._build_openai_url(config.base_url)
+        logger.info(f"OpenAI 调用: {url}, model={config.model_name}")
 
-        async with httpx.AsyncClient(timeout=120) as client:
+        async with httpx.AsyncClient(timeout=_load_config()["timeouts"]["openai"]) as client:
             resp = await client.post(url, json=payload, headers=headers)
             resp.raise_for_status()
             data = resp.json()
 
-        return data["choices"][0]["message"]["content"]
+        content = data["choices"][0]["message"]["content"]
+        # 如果是 thinking 模型，移除 <thinking> 标签
+        if getattr(config, 'enable_thinking', False):
+            content = LLMService._strip_thinking(content)
+        return content
 
     @staticmethod
     async def _call_ollama(
@@ -173,7 +190,7 @@ class LLMService:
             "options": {"temperature": temperature},
         }
 
-        async with httpx.AsyncClient(timeout=300) as client:
+        async with httpx.AsyncClient(timeout=_load_config()["timeouts"]["ollama"]) as client:
             resp = await client.post(url, json=payload)
             resp.raise_for_status()
             data = resp.json()
@@ -196,7 +213,7 @@ class LLMService:
             "user": "graph-studio",
         }
 
-        async with httpx.AsyncClient(timeout=120) as client:
+        async with httpx.AsyncClient(timeout=_load_config()["timeouts"]["dify"]) as client:
             resp = await client.post(url, json=payload, headers=headers)
             resp.raise_for_status()
             data = resp.json()
@@ -214,12 +231,13 @@ class LLMService:
         """测试 LLM 接口连通性"""
         start = time.time()
         try:
+            cfg = _load_config()
             response = await LLMService.call_llm(
                 config,
                 system_prompt="You are a helpful assistant.",
                 user_prompt="Reply with exactly: OK",
                 temperature=0,
-                max_tokens=10,
+                max_tokens=cfg["timeouts"]["test_max_tokens"],
             )
             elapsed = int((time.time() - start) * 1000)
             return {
@@ -284,6 +302,7 @@ class LLMService:
         if not config:
             raise ValueError("请先在设置中配置 LLM 接口")
 
+        cfg = _load_config()
         context_section = ""
         if request.context:
             context_section = f"Additional context:\n{request.context}"
@@ -297,7 +316,7 @@ class LLMService:
                 if parent_task.description:
                     context_section += f"\nParent description: {parent_task.description}"
 
-        user_prompt = DECOMPOSE_USER_TEMPLATE.format(
+        user_prompt = cfg["prompts"]["decompose_user"].format(
             depth=request.depth,
             description=request.description,
             context_section=context_section,
@@ -305,10 +324,10 @@ class LLMService:
 
         raw_response = await LLMService.call_llm(
             config,
-            system_prompt=DECOMPOSE_SYSTEM_PROMPT,
+            system_prompt=cfg["prompts"]["decompose_system"],
             user_prompt=user_prompt,
-            temperature=0.7,
-            max_tokens=4096,
+            temperature=config.temperature,
+            max_tokens=cfg["defaults"]["max_tokens"],
         )
 
         parsed = LLMService._extract_json(raw_response)

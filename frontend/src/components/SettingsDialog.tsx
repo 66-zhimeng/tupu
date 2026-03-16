@@ -4,7 +4,7 @@
  */
 import { useState, useEffect } from 'react';
 import {
-    Modal, Tabs, Form, Input, Select, Button, Space, Alert, Spin,
+    Modal, Tabs, Form, Input, Select, Button, Space, Alert, Spin, Slider, Switch,
 } from 'antd';
 import {
     ApiOutlined, CheckCircleOutlined, CloseCircleOutlined,
@@ -52,9 +52,11 @@ export default function SettingsDialog({ open, onClose }: Props) {
                     if (config) {
                         form.setFieldsValue({
                             provider: config.provider,
-                            api_key: '', // 不回显完整 key
+                            api_key: '',
                             base_url: config.base_url,
                             model_name: config.model_name,
+                            temperature: config.temperature ?? 0.7,
+                            enable_thinking: config.enable_thinking ?? false,
                         });
                     } else {
                         form.setFieldsValue({
@@ -62,6 +64,8 @@ export default function SettingsDialog({ open, onClose }: Props) {
                             api_key: '',
                             base_url: PROVIDER_DEFAULTS.openai.base_url,
                             model_name: PROVIDER_DEFAULTS.openai.model_name,
+                            temperature: 0.7,
+                            enable_thinking: false,
                         });
                     }
                 })
@@ -91,6 +95,8 @@ export default function SettingsDialog({ open, onClose }: Props) {
                 provider: values.provider,
                 base_url: values.base_url,
                 model_name: values.model_name,
+                temperature: values.temperature ?? 0.7,
+                enable_thinking: values.enable_thinking ?? false,
             };
             // 只有填写了新 key 才传，否则保留旧 key
             if (values.api_key) {
@@ -163,6 +169,14 @@ export default function SettingsDialog({ open, onClose }: Props) {
 
                 <Form.Item name="model_name" label="模型名称" rules={[{ required: true }]}>
                     <Input placeholder="gpt-4o-mini" />
+                </Form.Item>
+
+                <Form.Item name="temperature" label="温度 (Temperature)">
+                    <Slider min={0} max={2} step={0.1} marks={{ 0: '0', 0.7: '0.7', 1: '1', 2: '2' }} />
+                </Form.Item>
+
+                <Form.Item name="enable_thinking" label="思考模式 (Thinking)" valuePropName="checked">
+                    <Switch checkedChildren="开" unCheckedChildren="关" />
                 </Form.Item>
 
                 <Space style={{ width: '100%', justifyContent: 'space-between' }}>
