@@ -258,10 +258,6 @@ export default function GraphCanvas() {
       animation: true,
 
       behaviors: [
-        {
-          type: 'drag-element',
-          key: 'drag-node',
-        },
         { type: 'drag-canvas', key: 'drag-canvas' },
         'zoom-canvas',
         {
@@ -491,6 +487,28 @@ export default function GraphCanvas() {
       _dragLastX = gx; _dragLastY = gy;
       if (Math.abs(dx) < 0.001 && Math.abs(dy) < 0.001) return;
       graph.translateElementBy(_dragTarget, [dx, dy], false);
+
+      // ★ 碰撞检测：推开重叠节点
+      const [myX, myY] = getNodePos(_dragTarget);
+      const myR = Number(graph.getNodeData(_dragTarget)?.data?.nodeRadius) || 55;
+      const allNodes = graph.getNodeData();
+      if (Array.isArray(allNodes)) {
+        for (const n of allNodes) {
+          const nid = n.id as string;
+          if (nid === _dragTarget) continue;
+          const [nx, ny] = getNodePos(nid);
+          const nR = Number(n.data?.nodeRadius) || 55;
+          const minDist = myR + nR + 10; // 10px 间距
+          const distX = nx - myX, distY = ny - myY;
+          const dist = Math.sqrt(distX * distX + distY * distY);
+          if (dist < minDist && dist > 0.1) {
+            const overlap = minDist - dist;
+            const pushX = (distX / dist) * overlap;
+            const pushY = (distY / dist) * overlap;
+            graph.translateElementBy(nid, [pushX, pushY], false);
+          }
+        }
+      }
     }
     graph.on('node:pointermove', (evt: any) => handleDragMove(evt.canvas?.x ?? 0, evt.canvas?.y ?? 0));
     graph.on('canvas:pointermove', (evt: any) => handleDragMove(evt.canvas?.x ?? 0, evt.canvas?.y ?? 0));
