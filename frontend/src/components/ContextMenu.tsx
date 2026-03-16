@@ -9,7 +9,8 @@ import {
   PlusOutlined,
   DeleteOutlined,
   FlagOutlined,
-  ZoomInOutlined,
+  EnterOutlined,
+  RobotOutlined,
 } from '@ant-design/icons';
 import { useGraphStore } from '../stores/graphStore';
 import { deleteMilestone } from '../services/api';
@@ -26,6 +27,7 @@ export default function ContextMenu() {
     selectNode,
     graphData,
     loadGraphData,
+    drillDown,
   } = useGraphStore();
 
   useEffect(() => {
@@ -73,6 +75,17 @@ export default function ContextMenu() {
           <FlagOutlined className="ctx-icon" />
           <span>新建里程碑</span>
         </div>
+        <div className="ctx-menu-divider" />
+        <div
+          className="ctx-menu-item"
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent('open-ai-decompose', { detail: {} }));
+            hideContextMenu();
+          }}
+        >
+          <RobotOutlined className="ctx-icon" />
+          <span>AI 拆解新任务</span>
+        </div>
       </div>
     );
   }
@@ -113,14 +126,28 @@ export default function ContextMenu() {
             <div
               className="ctx-menu-item"
               onClick={() => {
-                window.dispatchEvent(new CustomEvent('drillInto', { detail: nodeId }));
+                drillDown(nodeId);
                 hideContextMenu();
               }}
             >
-              <ZoomInOutlined className="ctx-icon" />
+              <EnterOutlined className="ctx-icon" />
               <span>进入子任务</span>
             </div>
           )}
+
+          <div
+            className="ctx-menu-item"
+            onClick={() => {
+              const node = graphData?.nodes.find(n => n.id === nodeId);
+              window.dispatchEvent(new CustomEvent('open-ai-decompose', {
+                detail: { parentTaskId: nodeId, parentTaskTitle: node?.title },
+              }));
+              hideContextMenu();
+            }}
+          >
+            <RobotOutlined className="ctx-icon" />
+            <span>AI 拆解子任务</span>
+          </div>
 
           <div className="ctx-menu-divider" />
           <div

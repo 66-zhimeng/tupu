@@ -1,4 +1,4 @@
-/* GraphCanvas — FlowEditor 风格 */
+/* GraphCanvas — MiroFish 风格升级 */
 
 .canvas-wrapper {
   width: 100%;
@@ -13,6 +13,7 @@
 .canvas-wrapper.connect-mode .canvas-container * {
   cursor: crosshair !important;
 }
+
 /* 非连线模式 — 确保恢复默认光标 */
 .canvas-wrapper:not(.connect-mode) .canvas-container canvas {
   cursor: grab !important;
@@ -23,38 +24,51 @@
   flex: 1;
   width: 100%;
   background: var(--canvas-bg);
+  position: relative;
 }
 
 /* 里程碑标签栏 */
 .canvas-top-bar {
   display: flex;
   align-items: center;
-  padding: 6px 16px;
-  background: var(--glass-bg);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  border-bottom: 1px solid var(--color-border-light);
-  min-height: 38px;
+  padding: 8px 20px;
+  background: var(--color-bg-card);
+  border-bottom: 1px solid var(--color-border);
+  min-height: 42px;
   z-index: 10;
+  gap: 8px;
+  animation: fadeIn 0.3s ease;
+}
+
+.canvas-top-bar::before {
+  content: '里程碑';
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-family: var(--font-mono);
+  margin-right: 8px;
+  flex-shrink: 0;
 }
 
 .milestone-tags {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   overflow-x: auto;
 }
 
 .milestone-tag {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 14px;
+  gap: 6px;
+  padding: 5px 16px;
   background: var(--color-bg-card);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-pill);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--color-text);
   cursor: pointer;
   white-space: nowrap;
@@ -67,8 +81,12 @@
   background: var(--color-primary-light);
   border-color: var(--color-primary);
   color: var(--color-primary);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-sm);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.milestone-tag:active {
+  transform: translateY(0);
 }
 
 .milestone-icon {
@@ -79,34 +97,37 @@
 .milestone-pct {
   color: var(--color-primary);
   font-weight: 700;
+  font-family: var(--font-mono);
   margin-left: 2px;
+  font-size: 11px;
 }
 
-/* 操作提示 */
+/* 操作提示 — 居中胶囊 + 入场动画 */
 .canvas-hint {
   position: absolute;
-  bottom: 16px;
+  bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
-  padding: 6px 16px;
-  background: var(--glass-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--glass-border);
-  color: var(--color-text-secondary);
-  font-size: 11px;
+  padding: 8px 20px;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 12px;
   font-weight: 500;
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-pill);
   z-index: 10;
   pointer-events: none;
-  box-shadow: var(--shadow-sm);
-  letter-spacing: 0.2px;
+  box-shadow: var(--shadow-md);
+  letter-spacing: 0.3px;
+  animation: fadeInUp 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
 .connect-mode .canvas-hint {
-  background: rgba(59, 130, 246, 0.12);
-  border-color: rgba(59, 130, 246, 0.3);
+  background: rgba(59, 130, 246, 0.08);
+  border-color: rgba(59, 130, 246, 0.25);
   color: var(--color-primary);
+  font-weight: 600;
+  animation: fadeInUp 0.3s ease, glowPulse 2s ease-in-out infinite;
 }
 
 /* Minimap 样式覆盖 */

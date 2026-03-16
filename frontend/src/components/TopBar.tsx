@@ -1,7 +1,8 @@
 /**
- * 顶部工具栏 — FlowEditor 风格
- * 毛玻璃背景 + 按钮组（连线模式、缩放控制、刷新）
+ * 顶部工具栏 — MiroFish 风格
+ * 简约白底 + Monospace 品牌标识 + 居中工具组 + 状态指示器
  */
+import { useState, useEffect, useCallback } from 'react';
 import { Button, Space, Typography, Tooltip, Divider } from 'antd';
 import {
   ReloadOutlined,
@@ -11,8 +12,12 @@ import {
   ExpandOutlined,
   ApiOutlined,
   FlagOutlined,
+  SettingOutlined,
+  RobotOutlined,
 } from '@ant-design/icons';
 import { useGraphStore } from '../stores/graphStore';
+import SettingsDialog from './SettingsDialog';
+import AIDecomposeDialog from './AIDecomposeDialog';
 import './TopBar.css';
 
 const { Text } = Typography;
@@ -31,6 +36,27 @@ export default function TopBar() {
     fitView,
   } = useGraphStore();
 
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [decomposeOpen, setDecomposeOpen] = useState(false);
+  const [decomposeParent, setDecomposeParent] = useState<{
+    id?: string; title?: string;
+  }>({});
+
+  // 监听 ContextMenu 发出的 AI 拆解事件
+  const handleAIDecompose = useCallback((e: Event) => {
+    const detail = (e as CustomEvent).detail || {};
+    setDecomposeParent({
+      id: detail.parentTaskId,
+      title: detail.parentTaskTitle,
+    });
+    setDecomposeOpen(true);
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener('open-ai-decompose', handleAIDecompose);
+    return () => window.removeEventListener('open-ai-decompose', handleAIDecompose);
+  }, [handleAIDecompose]);
+
   const nodeCount = graphData?.nodes.length || 0;
   const milestoneCount = graphData?.milestones.length || 0;
   const totalHours = graphData?.nodes
@@ -38,26 +64,26 @@ export default function TopBar() {
     .reduce((s, n) => s + (n.computed_hours || 0), 0) || 0;
 
   return (
-    <div className="top-bar glass">
+    <div className="top-bar">
       {/* 左侧：品牌标识 + 统计 */}
       <div className="top-bar-left">
         <div className="top-bar-brand">
           <span className="brand-icon">◈</span>
-          <Text strong className="brand-title">Graph Studio</Text>
+          <Text className="brand-title">Graph Studio</Text>
         </div>
         <div className="top-bar-stats">
           <span className="stat-item">
             <span className="stat-dot" style={{ background: 'var(--color-primary)' }} />
-            {nodeCount} 任务
+            <span className="stat-value">{nodeCount}</span> 任务
           </span>
           <span className="stat-item">
             <span className="stat-dot" style={{ background: 'var(--color-info)' }} />
-            {milestoneCount} 里程碑
+            <span className="stat-value">{milestoneCount}</span> 里程碑
           </span>
           {totalHours > 0 && (
             <span className="stat-item">
               <span className="stat-dot" style={{ background: 'var(--color-success)' }} />
-              {totalHours.toFixed(0)}人天
+              <span className="stat-value">{totalHours.toFixed(0)}</span>人天
             </span>
           )}
         </div>
@@ -110,8 +136,27 @@ export default function TopBar() {
         </Space.Compact>
       </div>
 
-      {/* 右侧：刷新 */}
+      {/* 右侧：AI + 设置 + 状态 + 刷新 */}
       <div className="top-bar-right">
+        <Tooltip title="AI 任务拆解">
+          <Button
+            icon={<RobotOutlined />}
+            onClick={() => { setDecomposeParent({}); setDecomposeOpen(true); }}
+            className="toolbar-btn ai-btn"
+          />
+        </Tooltip>
+        <Tooltip title="设置">
+          <Button
+            icon={<SettingOutlined />}
+            onClick={() => setSettingsOpen(true)}
+            className="toolbar-btn"
+          />
+        </Tooltip>
+        <div className="top-bar-separator" />
+        <div className={`status-indicator ${loading ? 'loading' : ''}`}>
+          <span className="status-dot" />
+          <span>{loading ? '加载中' : '就绪'}</span>
+        </div>
         <Tooltip title="刷新数据">
           <Button
             icon={<ReloadOutlined />}
@@ -121,6 +166,15 @@ export default function TopBar() {
           />
         </Tooltip>
       </div>
+
+      {/* 对话框 */}
+      <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <AIDecomposeDialog
+        open={decomposeOpen}
+        onClose={() => setDecomposeOpen(false)}
+        parentTaskId={decomposeParent.id}
+        parentTaskTitle={decomposeParent.title}
+      />
     </div>
   );
 }

@@ -5,6 +5,7 @@ import GraphCanvas from './components/GraphCanvas';
 import TaskDrawer from './components/TaskDrawer';
 import ContextMenu from './components/ContextMenu';
 import TopBar from './components/TopBar';
+import SidebarTree from './components/SidebarTree';
 import './App.css';
 
 function App() {
@@ -12,6 +13,7 @@ function App() {
     <div className="app-container">
       <TopBar />
       <div className="app-main">
+        <SidebarTree />
         <GraphCanvas />
       </div>
       <TaskDrawer />

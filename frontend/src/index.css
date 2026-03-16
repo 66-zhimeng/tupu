@@ -1,60 +1,75 @@
-/* Graph Studio — 全局基础样式 */
+/* Graph Studio — 全局基础样式（MiroFish 风格升级） */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 /* ===== 设计令牌 ===== */
 :root {
   /* 主色系 */
   --color-primary: #3B82F6;
   --color-primary-hover: #2563EB;
-  --color-primary-light: rgba(59, 130, 246, 0.12);
+  --color-primary-light: rgba(59, 130, 246, 0.10);
   --color-primary-glow: rgba(59, 130, 246, 0.25);
+  --color-primary-deep: #1D4ED8;
 
   /* 语义色 */
   --color-success: #10B981;
+  --color-success-light: rgba(16, 185, 129, 0.10);
   --color-warning: #F59E0B;
+  --color-warning-light: rgba(245, 158, 11, 0.10);
   --color-danger: #EF4444;
+  --color-danger-light: rgba(239, 68, 68, 0.08);
   --color-info: #6366F1;
+  --color-info-light: rgba(99, 102, 241, 0.10);
 
   /* 中性色 */
-  --color-bg: #F8FAFC;
-  --color-bg-elevated: rgba(255, 255, 255, 0.82);
+  --color-bg: #FAFAFA;
+  --color-bg-elevated: rgba(255, 255, 255, 0.88);
   --color-bg-card: #FFFFFF;
-  --color-border: #E2E8F0;
-  --color-border-light: #F1F5F9;
-  --color-text: #1E293B;
-  --color-text-secondary: #64748B;
-  --color-text-muted: #94A3B8;
+  --color-border: #EAEAEA;
+  --color-border-light: #F3F3F3;
+  --color-text: #111111;
+  --color-text-secondary: #666666;
+  --color-text-muted: #999999;
 
   /* 画布 */
-  --canvas-bg: #F1F5F9;
-  --canvas-grid: #E2E8F0;
+  --canvas-bg: #F5F5F5;
+  --canvas-grid: #E8E8E8;
 
   /* 毛玻璃 */
-  --glass-blur: 16px;
-  --glass-bg: rgba(255, 255, 255, 0.72);
-  --glass-border: rgba(255, 255, 255, 0.4);
+  --glass-blur: 20px;
+  --glass-bg: rgba(255, 255, 255, 0.82);
+  --glass-border: rgba(255, 255, 255, 0.5);
+
+  /* 渐变 */
+  --gradient-brand: linear-gradient(135deg, #3B82F6 0%, #6366F1 100%);
+  --gradient-card: linear-gradient(135deg, #FAFAFA 0%, #F0F0FF 100%);
+  --gradient-warm: linear-gradient(135deg, #FAFAFA 0%, #FEF3C7 100%);
+  --gradient-subtle: linear-gradient(180deg, rgba(59, 130, 246, 0.04) 0%, transparent 100%);
 
   /* 阴影 */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
-  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.1);
-  --shadow-float: 0 12px 40px rgba(0, 0, 0, 0.12);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08);
+  --shadow-float: 0 12px 40px rgba(0, 0, 0, 0.10);
+  --shadow-glow-blue: 0 0 20px rgba(59, 130, 246, 0.15);
 
   /* 圆角 */
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
   --radius-xl: 20px;
+  --radius-pill: 999px;
 
-  /* 过渡 */
-  --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-smooth: 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  /* 过渡 — 采用 MiroFish 弹性曲线 */
+  --transition-fast: 0.15s cubic-bezier(0.25, 0.8, 0.25, 1);
+  --transition-normal: 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+  --transition-smooth: 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
 
   /* 字体 */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+  --font-sans: 'Space Grotesk', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
     'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
 }
 
 /* ===== 全局重置 ===== */
@@ -89,7 +104,7 @@ html, body, #root {
 ::-webkit-scrollbar-thumb {
   background: var(--color-text-muted);
   border-radius: 3px;
-  opacity: 0.5;
+  opacity: 0.4;
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -102,4 +117,51 @@ html, body, #root {
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--glass-border);
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+/* ===== 全局动画 ===== */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.2); }
+  50% { box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); }
 }

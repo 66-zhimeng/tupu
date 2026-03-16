@@ -7,7 +7,7 @@ from loguru import logger
 
 from app.core.config import settings
 from app.core.database import init_db
-from app.api import tasks, milestones, dependencies, graph
+from app.api import tasks, milestones, dependencies, graph, llm
 
 
 @asynccontextmanager
@@ -40,6 +40,7 @@ app.include_router(tasks.router)
 app.include_router(milestones.router)
 app.include_router(dependencies.router)
 app.include_router(graph.router)
+app.include_router(llm.router)
 
 
 @app.get("/api/health")

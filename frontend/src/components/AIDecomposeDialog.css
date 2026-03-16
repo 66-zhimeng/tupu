@@ -1,0 +1,45 @@
+/* AI 拆解对话框样式 */
+.ai-decompose-dialog .ant-modal-content {
+    border-radius: 12px;
+}
+
+.decompose-input-section {
+    margin-bottom: 12px;
+}
+
+.decompose-preview {
+    margin-top: 16px;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.decompose-preview-header {
+    padding: 10px 14px;
+    background: rgba(0, 0, 0, 0.02);
+    border-bottom: 1px solid var(--color-border);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.decompose-tree {
+    padding: 8px;
+    max-height: 360px;
+    overflow-y: auto;
+}
+
+.decompose-tree-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 13px;
+}
+
+.decompose-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 10px 14px;
+    border-top: 1px solid var(--color-border);
+    background: rgba(0, 0, 0, 0.02);
+}

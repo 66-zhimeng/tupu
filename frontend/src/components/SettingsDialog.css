@@ -1,0 +1,26 @@
+/* SettingsDialog 样式 */
+.settings-dialog .ant-modal-content {
+    border-radius: 12px;
+}
+
+.settings-dialog .ant-modal-header {
+    border-bottom: 1px solid var(--color-border);
+    padding: 16px 20px;
+}
+
+.settings-dialog .ant-modal-body {
+    padding: 12px 20px 20px;
+}
+
+.settings-dialog .ant-tabs-tab {
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.settings-dialog .ant-form-item {
+    margin-bottom: 16px;
+}
+
+.settings-dialog .ant-alert {
+    border-radius: 8px;
+}

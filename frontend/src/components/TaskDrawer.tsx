@@ -200,32 +200,34 @@ export default function TaskDrawer() {
         result.push(
           <div key={t.id} style={{
             marginBottom: 4,
-            padding: '5px 10px',
-            paddingLeft: 10 + depth * 20,
-            background: depth === 0 ? '#F1F5F9' : '#F8FAFC',
+            padding: '6px 12px',
+            paddingLeft: 12 + depth * 20,
+            background: depth === 0 ? '#FAFAFA' : '#FFFFFF',
             borderRadius: 8,
             fontSize: 13,
             display: 'flex',
             alignItems: 'center',
             gap: 6,
+            border: '1px solid #F3F3F3',
+            transition: 'all 0.15s ease',
           }}>
-            <span style={{ color: '#94A3B8', fontSize: 11, minWidth: 16 }}>
+            <span style={{ color: '#CCCCCC', fontSize: 11, minWidth: 16 }}>
               {'└'.repeat(depth > 0 ? 1 : 0)}
             </span>
             <Tag color={
               t.status === '已完成' ? 'green' :
-              t.status === '已取消' ? 'default' : 'blue'
+                t.status === '已取消' ? 'default' : 'blue'
             } style={{ margin: 0 }}>
               {t.status}
             </Tag>
             <span style={{
               flex: 1,
               fontWeight: depth === 0 ? 600 : 400,
-              color: t.status === '已完成' ? '#94A3B8' : '#1E293B',
+              color: t.status === '已完成' ? '#999' : '#111',
               textDecoration: t.status === '已取消' ? 'line-through' : 'none',
             }}>{t.title}</span>
             {t.computed_hours > 0 && (
-              <span style={{ color: '#94A3B8', fontSize: 12 }}>
+              <span style={{ color: '#999', fontSize: 12, fontFamily: "'JetBrains Mono', monospace" }}>
                 {t.computed_hours.toFixed(1)}人天
               </span>
             )}
@@ -257,12 +259,17 @@ export default function TaskDrawer() {
             {/* 顶部卡片区 */}
             <div style={{
               padding: '20px 20px 16px',
-              background: 'linear-gradient(135deg, #F8FAFC 0%, #EEF2FF 100%)',
-              borderBottom: '1px solid var(--color-border-light)',
+              background: 'linear-gradient(135deg, #FAFAFA 0%, #F0F0FF 100%)',
+              borderBottom: '1px solid #EAEAEA',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                 <span style={{ fontSize: 18 }}>📋</span>
-                <span style={{ fontSize: 15, fontWeight: 700, color: '#1E293B' }}>
+                <span style={{
+                  fontSize: 15,
+                  fontWeight: 700,
+                  color: '#111',
+                  fontFamily: "'Space Grotesk', 'Inter', sans-serif",
+                }}>
                   {task.title}
                 </span>
               </div>
@@ -287,7 +294,7 @@ export default function TaskDrawer() {
                   </div>
                   <Tag color={
                     task.status === '已完成' ? 'green' :
-                    task.status === '已取消' ? 'default' : 'processing'
+                      task.status === '已取消' ? 'default' : 'processing'
                   }>
                     {task.status}
                   </Tag>
@@ -297,10 +304,11 @@ export default function TaskDrawer() {
               {!task.is_leaf && childCount > 0 && (
                 <div style={{
                   padding: '6px 10px',
-                  background: 'rgba(59, 130, 246, 0.06)',
+                  background: 'rgba(59, 130, 246, 0.04)',
                   borderRadius: 8,
                   fontSize: 11,
-                  color: '#64748B',
+                  color: '#999',
+                  border: '1px solid rgba(59, 130, 246, 0.08)',
                 }}>
                   工时 = 子任务之和 ({task.computed_hours?.toFixed(1)}人天)  ·  进度 = 已完成占比 ({task.computed_progress?.toFixed(1)}%)
                 </div>
@@ -377,10 +385,13 @@ export default function TaskDrawer() {
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         marginBottom: 8,
-                        padding: '6px 10px',
-                        background: '#F8FAFC',
-                        borderRadius: 8,
+                        padding: '8px 12px',
+                        background: '#FAFAFA',
+                        borderRadius: 10,
                         fontSize: 13,
+                        border: '1px solid #F3F3F3',
+                        transition: 'all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1)',
+                        cursor: 'default',
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           {isSource
@@ -458,12 +469,17 @@ export default function TaskDrawer() {
           <div className="drawer-content">
             <div style={{
               padding: '20px 20px 16px',
-              background: 'linear-gradient(135deg, #F8FAFC 0%, #FEF3C7 100%)',
-              borderBottom: '1px solid var(--color-border-light)',
+              background: 'linear-gradient(135deg, #FAFAFA 0%, #FEF3C7 100%)',
+              borderBottom: '1px solid #EAEAEA',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                 <span style={{ fontSize: 18 }}>🏁</span>
-                <span style={{ fontSize: 15, fontWeight: 700, color: '#1E293B' }}>
+                <span style={{
+                  fontSize: 15,
+                  fontWeight: 700,
+                  color: '#111',
+                  fontFamily: "'Space Grotesk', 'Inter', sans-serif",
+                }}>
                   {ms.title}
                 </span>
               </div>
@@ -535,7 +551,7 @@ export default function TaskDrawer() {
                 删除里程碑
               </Button>
 
-              <div style={{ fontSize: 12, color: '#94A3B8', textAlign: 'center', marginTop: 12 }}>
+              <div style={{ fontSize: 12, color: '#999', textAlign: 'center', marginTop: 12 }}>
                 在任务编辑面板中选择「所属里程碑」可将任务关联到此里程碑
               </div>
             </div>

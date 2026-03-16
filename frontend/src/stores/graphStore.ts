@@ -93,6 +93,9 @@ interface GraphStore {
   // Helpers
   getCurrentLevelNodes: () => GraphNode[];
   getSelectedNode: () => GraphNode | GraphMilestone | null;
+  // 位置缓存（跨层级保留节点位置）
+  positionCache: Map<string, { x: number; y: number }>;
+  cacheCurrentPositions: () => void;
 }
 
 export const useGraphStore = create<GraphStore>((set, get) => ({
@@ -107,6 +110,7 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
   drawerVisible: false,
   enableConnect: false,
   contextMenu: { visible: false, x: 0, y: 0, canvasX: 0, canvasY: 0 },
+  positionCache: new Map(),
 
   setGraphInstance: (g) => set({ graphInstance: g }),
 
@@ -250,8 +254,33 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
     await get().loadGraphData();
   },
 
+  // 缓存当前层级的节点位置
+  cacheCurrentPositions: () => {
+    const { graphInstance, positionCache } = get();
+    if (!graphInstance) return;
+    try {
+      const allNodes = graphInstance.getNodeData();
+      if (Array.isArray(allNodes)) {
+        const newCache = new Map(positionCache);
+        allNodes.forEach((n: any) => {
+          try {
+            const pos = graphInstance.getElementPosition(n.id as string);
+            newCache.set(n.id as string, { x: pos[0], y: pos[1] });
+          } catch {
+            if (n?.style?.x != null && n?.style?.y != null) {
+              newCache.set(n.id as string, { x: n.style.x, y: n.style.y });
+            }
+          }
+        });
+        set({ positionCache: newCache });
+      }
+    } catch { /* ignore */ }
+  },
+
   // ===== 层级导航 =====
   drillDown: (taskId) => {
+    // 先缓存当前层级的位置
+    get().cacheCurrentPositions();
     const { graphData, breadcrumbs } = get();
     if (!graphData) return;
     const task = graphData.nodes.find(n => n.id === taskId);
@@ -265,6 +294,7 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
   },
 
   goUp: () => {
+    get().cacheCurrentPositions();
     const { breadcrumbs } = get();
     if (breadcrumbs.length <= 1) return;
     const newBreadcrumbs = breadcrumbs.slice(0, -1);
@@ -276,6 +306,7 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
   },
 
   goToLevel: (index) => {
+    get().cacheCurrentPositions();
     const { breadcrumbs } = get();
     if (index < 0 || index >= breadcrumbs.length) return;
     const newBreadcrumbs = breadcrumbs.slice(0, index + 1);
