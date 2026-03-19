@@ -599,6 +599,20 @@ export default function GraphCanvas() {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ★ 浏览器窗口/容器大小变化 → 自动调整画布
+  useEffect(() => {
+    if (!containerRef.current || !graphRef.current) return;
+    const ro = new ResizeObserver(() => {
+      if (!graphRef.current || !containerRef.current) return;
+      const { width, height } = containerRef.current.getBoundingClientRect();
+      if (width > 0 && height > 0) {
+        graphRef.current.resize(width, height);
+      }
+    });
+    ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, [graphRef.current]); // re-attach if graph re-creates
+
   // 数据变化 / 层级变化 → 更新画布
   useEffect(() => {
     if (!graphRef.current || !graphData) return;
