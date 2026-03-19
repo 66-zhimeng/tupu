@@ -14,6 +14,7 @@ import {
 } from '@ant-design/icons';
 import { useGraphStore } from '../stores/graphStore';
 import { deleteMilestone } from '../services/api';
+import { LAYOUT_OPTIONS } from '../utils/layoutEngine';
 import './ContextMenu.css';
 
 export default function ContextMenu() {
@@ -86,6 +87,21 @@ export default function ContextMenu() {
           <RobotOutlined className="ctx-icon" />
           <span>AI 拆解新任务</span>
         </div>
+        <div className="ctx-menu-divider" />
+        <div className="ctx-menu-group-label">重新排列</div>
+        {LAYOUT_OPTIONS.map(opt => (
+          <div
+            key={opt.key}
+            className="ctx-menu-item"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent('apply-layout', { detail: { layout: opt.key, label: opt.label } }));
+              hideContextMenu();
+            }}
+          >
+            <span className="ctx-icon">{opt.icon}</span>
+            <span>{opt.label}</span>
+          </div>
+        ))}
       </div>
     );
   }

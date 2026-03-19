@@ -12,6 +12,7 @@ import { Graph } from '@antv/g6';
 import { message } from 'antd';
 import { useGraphStore } from '../stores/graphStore';
 import type { GraphNode, GraphMilestone } from '../services/api';
+import { getLayoutConfig, importLayout, exportLayout, type LayoutName, type PositionMap } from '../utils/layoutEngine';
 import './GraphCanvas.css';
 
 /* ===== 辅助函数 ===== */
@@ -612,6 +613,99 @@ export default function GraphCanvas() {
     ro.observe(containerRef.current);
     return () => ro.disconnect();
   }, [graphRef.current]); // re-attach if graph re-creates
+
+  // ★ 布局模板事件监听
+  useEffect(() => {
+    const handleApplyLayout = async (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      const layoutName: LayoutName = detail?.layout;
+      if (!graphRef.current || !graphData) return;
+
+      const graph = graphRef.current;
+      const config = getLayoutConfig(layoutName);
+      if (!config) return;
+
+      try {
+        // 使用 G6 内置布局算法
+        graph.setLayout(config);
+        await graph.layout();
+
+        // 布局完成后保存所有节点位置到数据库
+        const { savePosition } = useGraphStore.getState();
+        const allNodes = graph.getNodeData();
+        if (Array.isArray(allNodes)) {
+          for (const n of allNodes) {
+            try {
+              const pos = graph.getElementPosition(n.id as string);
+              savePosition(n.id as string, pos[0], pos[1]);
+            } catch { /* skip */ }
+          }
+        }
+        message.success(`已应用「${detail?.label || layoutName}」布局`);
+      } catch (err) {
+        console.error('[Layout]', err);
+        message.error('布局失败，请重试');
+      }
+    };
+
+    const handleImportLayout = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!detail?.json || !graphRef.current) return;
+      try {
+        const positions = importLayout(detail.json);
+        applyPositionsToGraph(positions);
+        message.success('已导入自定义布局');
+      } catch {
+        message.error('导入失败：JSON 格式错误');
+      }
+    };
+
+    const handleExportLayout = () => {
+      if (!graphRef.current) return;
+      const allNodes = graphRef.current.getNodeData();
+      if (!Array.isArray(allNodes)) return;
+      const positions: PositionMap = new Map();
+      allNodes.forEach((n: any) => {
+        try {
+          const pos = graphRef.current!.getElementPosition(n.id);
+          positions.set(n.id, { x: pos[0], y: pos[1] });
+        } catch { /* skip */ }
+      });
+      const json = exportLayout(positions, 'custom');
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'layout.json'; a.click();
+      URL.revokeObjectURL(url);
+      message.success('布局已导出');
+    };
+
+    function applyPositionsToGraph(positions: PositionMap) {
+      if (!graphRef.current) return;
+      const graph = graphRef.current;
+      positions.forEach((pos, id) => {
+        try {
+          const curPos = graph.getElementPosition(id);
+          const dx = pos.x - curPos[0], dy = pos.y - curPos[1];
+          graph.translateElementBy(id, [dx, dy], false);
+        } catch { /* node not in current view */ }
+      });
+      // 批量保存
+      const { savePosition } = useGraphStore.getState();
+      positions.forEach((pos, id) => savePosition(id, pos.x, pos.y));
+      // fitView
+      setTimeout(() => graph.fitView(), 100);
+    }
+
+    window.addEventListener('apply-layout', handleApplyLayout);
+    window.addEventListener('import-layout', handleImportLayout);
+    window.addEventListener('export-layout', handleExportLayout);
+    return () => {
+      window.removeEventListener('apply-layout', handleApplyLayout);
+      window.removeEventListener('import-layout', handleImportLayout);
+      window.removeEventListener('export-layout', handleExportLayout);
+    };
+  }, [graphData]);
 
   // 数据变化 / 层级变化 → 更新画布
   useEffect(() => {

@@ -3,7 +3,8 @@
  * 简约白底 + Monospace 品牌标识 + 居中工具组 + 状态指示器
  */
 import { useState, useEffect, useCallback } from 'react';
-import { Button, Space, Typography, Tooltip, Divider } from 'antd';
+import { Button, Space, Typography, Tooltip, Divider, Dropdown } from 'antd';
+import type { MenuProps } from 'antd';
 import {
   ReloadOutlined,
   PlusOutlined,
@@ -16,6 +17,7 @@ import {
   RobotOutlined,
 } from '@ant-design/icons';
 import { useGraphStore } from '../stores/graphStore';
+import { LAYOUT_OPTIONS } from '../utils/layoutEngine';
 import SettingsDialog from './SettingsDialog';
 import AIDecomposeDialog from './AIDecomposeDialog';
 import './TopBar.css';
@@ -62,6 +64,39 @@ export default function TopBar() {
   const totalHours = graphData?.nodes
     .filter(n => !n.parent_id)
     .reduce((s, n) => s + (n.computed_hours || 0), 0) || 0;
+
+  // 布局菜单
+  const layoutMenuItems: MenuProps['items'] = [
+    ...LAYOUT_OPTIONS.map(opt => ({
+      key: opt.key,
+      label: `${opt.icon} ${opt.label}`,
+      onClick: () => window.dispatchEvent(new CustomEvent('apply-layout', { detail: { layout: opt.key, label: opt.label } })),
+    })),
+    { type: 'divider' as const },
+    {
+      key: 'export',
+      label: '📤 导出布局',
+      onClick: () => window.dispatchEvent(new CustomEvent('export-layout')),
+    },
+    {
+      key: 'import',
+      label: '📥 导入布局',
+      onClick: () => {
+        const input = document.createElement('input');
+        input.type = 'file'; input.accept = '.json';
+        input.onchange = (e: any) => {
+          const file = e.target?.files?.[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = () => {
+            window.dispatchEvent(new CustomEvent('import-layout', { detail: { json: reader.result as string } }));
+          };
+          reader.readAsText(file);
+        };
+        input.click();
+      },
+    },
+  ];
 
   return (
     <div className="top-bar">
@@ -134,6 +169,12 @@ export default function TopBar() {
             <Button icon={<ExpandOutlined />} onClick={fitView} className="toolbar-btn" />
           </Tooltip>
         </Space.Compact>
+
+        <Divider type="vertical" className="toolbar-divider" />
+
+        <Dropdown menu={{ items: layoutMenuItems }} trigger={['click']}>
+          <Button className="toolbar-btn">📐 布局</Button>
+        </Dropdown>
       </div>
 
       {/* 右侧：AI + 设置 + 状态 + 刷新 */}
