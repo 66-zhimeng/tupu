@@ -102,11 +102,12 @@ function buildG6Data(
 ) {
   if (!graphData) return { nodes: [], edges: [], combos: [] };
 
-  // 收集已有节点位置（优先用 graph 实例中的，再用缓存）
+  // 收集已有节点位置
+  // 优先级: graph 实例 > DB 存储 > 自动布局
   const existingPositions = new Map<string, { x: number; y: number }>();
-  // 先从缓存加载
+  // 1. 先从内存缓存加载
   positionCache.forEach((pos, id) => existingPositions.set(id, pos));
-  // 再从当前图加载（覆盖缓存）
+  // 2. 再从当前图实例加载（覆盖缓存）
   if (existingGraph) {
     try {
       const allNodes = existingGraph.getNodeData();
@@ -124,6 +125,14 @@ function buildG6Data(
   const levelNodes = graphData.nodes.filter(n => {
     if (currentParentId === null) return !n.parent_id;
     return n.parent_id === currentParentId;
+  });
+
+  // 3. 从 DB 存储的 position_x/y 加载（覆盖缓存，但低于图实例）
+  // 放在 levelNodes 之后，仅对当前层级节点有效
+  levelNodes.forEach(n => {
+    if (n.position_x != null && n.position_y != null && !existingPositions.has(n.id)) {
+      existingPositions.set(n.id, { x: n.position_x, y: n.position_y });
+    }
   });
 
   // 为每个节点确定子任务信息
@@ -146,27 +155,71 @@ function buildG6Data(
     }
   });
 
-  // ===== 网格布局（仅用于没有缓存位置的节点） =====
-  const gap = 50;
-  const rowWidth = 900;
-  let cursorX = 0, cursorY = 0, rowMaxH = 0;
-
-  const sorted = [...levelNodes].sort((a, b) =>
-    (radiusMap.get(b.id) || 30) - (radiusMap.get(a.id) || 30)
-  );
+  // ===== 拓扑排序自动布局（仅对没有保存位置的节点生效） =====
+  // 筛选出需要自动布局的节点
+  const needsLayout = levelNodes.filter(n => !existingPositions.has(n.id));
 
   const layoutPosMap = new Map<string, { x: number; y: number }>();
-  sorted.forEach(n => {
-    const r = radiusMap.get(n.id) || 55;
-    if (cursorX + r * 2 > rowWidth && cursorX > 0) {
-      cursorX = 0;
-      cursorY += rowMaxH + gap;
-      rowMaxH = 0;
+  if (needsLayout.length > 0) {
+    // 构建当前层级的依赖图
+    const levelIds = new Set(levelNodes.map(n => n.id));
+    const levelEdges = graphData.edges.filter(
+      e => levelIds.has(e.source) && levelIds.has(e.target)
+    );
+
+    // Kahn 拓扑排序 → 计算每个节点的层级
+    const inDeg = new Map<string, number>();
+    const adj = new Map<string, string[]>();
+    levelNodes.forEach(n => { inDeg.set(n.id, 0); adj.set(n.id, []); });
+    levelEdges.forEach(e => {
+      adj.get(e.source)?.push(e.target);
+      inDeg.set(e.target, (inDeg.get(e.target) || 0) + 1);
+    });
+
+    const layerMap = new Map<string, number>(); // nodeId -> layer index
+    const queue: string[] = [];
+    levelNodes.forEach(n => { if ((inDeg.get(n.id) || 0) === 0) queue.push(n.id); });
+    while (queue.length > 0) {
+      const cur = queue.shift()!;
+      const curLayer = layerMap.get(cur) || 0;
+      for (const next of (adj.get(cur) || [])) {
+        const newLayer = curLayer + 1;
+        if (newLayer > (layerMap.get(next) || 0)) layerMap.set(next, newLayer);
+        inDeg.set(next, (inDeg.get(next) || 0) - 1);
+        if (inDeg.get(next) === 0) queue.push(next);
+      }
     }
-    layoutPosMap.set(n.id, { x: cursorX + r, y: cursorY + r });
-    cursorX += r * 2 + gap;
-    rowMaxH = Math.max(rowMaxH, r * 2);
-  });
+
+    // 按 layer 分组
+    const layers = new Map<number, typeof levelNodes>();
+    levelNodes.forEach(n => {
+      const layer = layerMap.get(n.id) || 0;
+      if (!layers.has(layer)) layers.set(layer, []);
+      layers.get(layer)!.push(n);
+    });
+
+    // 布局参数
+    const colGap = 250;   // 列间距
+    const rowGap = 50;    // 行间距
+    const sortedLayers = [...layers.keys()].sort((a, b) => a - b);
+
+    let colX = 0;
+    for (const layerIdx of sortedLayers) {
+      const nodesInLayer = layers.get(layerIdx)!;
+      // 按半径从大到小排列
+      nodesInLayer.sort((a, b) => (radiusMap.get(b.id) || 30) - (radiusMap.get(a.id) || 30));
+      const maxR = Math.max(...nodesInLayer.map(n => radiusMap.get(n.id) || 55));
+      let rowY = 0;
+      for (const n of nodesInLayer) {
+        const r = radiusMap.get(n.id) || 55;
+        if (!existingPositions.has(n.id)) {
+          layoutPosMap.set(n.id, { x: colX + maxR, y: rowY + r });
+        }
+        rowY += r * 2 + rowGap;
+      }
+      colX += maxR * 2 + colGap;
+    }
+  }
 
   // ===== 构建 G6 节点数据 =====
   const nodes = levelNodes.map((node: GraphNode) => {
@@ -513,7 +566,25 @@ export default function GraphCanvas() {
     graph.on('node:pointermove', (evt: any) => handleDragMove(evt.canvas?.x ?? 0, evt.canvas?.y ?? 0));
     graph.on('canvas:pointermove', (evt: any) => handleDragMove(evt.canvas?.x ?? 0, evt.canvas?.y ?? 0));
     const endDrag = () => {
-      if (_dragTarget && _isDragging) { const [fx, fy] = getNodePos(_dragTarget); savePosition(_dragTarget, fx, fy); }
+      if (_dragTarget && _isDragging) {
+        const [fx, fy] = getNodePos(_dragTarget);
+        console.log('[GraphCanvas] 保存位置:', _dragTarget, fx, fy);
+        savePosition(_dragTarget, fx, fy);
+        // 同时保存被碰撞推开的节点位置
+        const allNodes = graph.getNodeData();
+        if (Array.isArray(allNodes)) {
+          for (const n of allNodes) {
+            const nid = n.id as string;
+            if (nid === _dragTarget) continue;
+            const [nx, ny] = getNodePos(nid);
+            const ox = Number(n.data?.position_x);
+            const oy = Number(n.data?.position_y);
+            if (isNaN(ox) || isNaN(oy) || Math.abs(nx - ox) > 1 || Math.abs(ny - oy) > 1) {
+              savePosition(nid, nx, ny);
+            }
+          }
+        }
+      }
       if (_dragTarget) graph.updateBehavior({ key: 'drag-canvas', enable: true });
       _dragTarget = null; _isDragging = false;
     };
