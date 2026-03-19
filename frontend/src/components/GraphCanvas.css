@@ -25,7 +25,9 @@
   width: 100%;
   min-height: 0;
   overflow: hidden;
-  background: var(--canvas-bg);
+  background:
+    radial-gradient(circle, var(--canvas-dot) var(--canvas-dot-size), transparent var(--canvas-dot-size)) 0 0 / var(--canvas-dot-gap) var(--canvas-dot-gap),
+    var(--canvas-bg);
   position: relative;
 }
 

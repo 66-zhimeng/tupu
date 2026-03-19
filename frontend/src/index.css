@@ -21,24 +21,27 @@
   --color-info: #6366F1;
   --color-info-light: rgba(99, 102, 241, 0.10);
 
-  /* 中性色 */
+  /* 中性色 — shadcn zinc scale */
   --color-bg: #FAFAFA;
-  --color-bg-elevated: rgba(255, 255, 255, 0.88);
+  --color-bg-elevated: rgba(255, 255, 255, 0.92);
   --color-bg-card: #FFFFFF;
-  --color-border: #EAEAEA;
-  --color-border-light: #F3F3F3;
-  --color-text: #111111;
-  --color-text-secondary: #666666;
-  --color-text-muted: #999999;
+  --color-border: #E4E4E7;
+  --color-border-light: #F4F4F5;
+  --color-text: #09090B;
+  --color-text-secondary: #71717A;
+  --color-text-muted: #A1A1AA;
 
-  /* 画布 */
-  --canvas-bg: #F5F5F5;
-  --canvas-grid: #E8E8E8;
+  /* 画布 — 点阵网格 */
+  --canvas-bg: #FAFAFA;
+  --canvas-dot: #D4D4D8;
+  --canvas-dot-size: 1.2px;
+  --canvas-dot-gap: 24px;
 
-  /* 毛玻璃 */
-  --glass-blur: 20px;
-  --glass-bg: rgba(255, 255, 255, 0.82);
-  --glass-border: rgba(255, 255, 255, 0.5);
+  /* 毛玻璃 — shadcn style */
+  --glass-blur: 16px;
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(228, 228, 231, 0.6);
+  --glass-saturate: 1.8;
 
   /* 渐变 */
   --gradient-brand: linear-gradient(135deg, #3B82F6 0%, #6366F1 100%);
@@ -61,10 +64,10 @@
   --radius-xl: 20px;
   --radius-pill: 999px;
 
-  /* 过渡 — 采用 MiroFish 弹性曲线 */
-  --transition-fast: 0.15s cubic-bezier(0.25, 0.8, 0.25, 1);
-  --transition-normal: 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
-  --transition-smooth: 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+  /* 过渡 — spring-bounce curve */
+  --transition-fast: 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-normal: 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-smooth: 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 
   /* 字体 */
   --font-sans: 'Space Grotesk', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
@@ -81,7 +84,9 @@
   padding: 0;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   width: 100%;
   height: 100%;
   font-family: var(--font-sans);
@@ -114,9 +119,10 @@ html, body, #root {
 /* ===== 通用工具类 ===== */
 .glass {
   background: var(--glass-bg);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   border: 1px solid var(--glass-border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(0, 0, 0, 0.02);
 }
 
 .font-mono {
@@ -125,8 +131,15 @@ html, body, #root {
 
 /* ===== 全局动画 ===== */
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.4;
+  }
 }
 
 @keyframes fadeInUp {
@@ -134,6 +147,7 @@ html, body, #root {
     opacity: 0;
     transform: translateY(8px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -141,8 +155,13 @@ html, body, #root {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slideInRight {
@@ -150,6 +169,7 @@ html, body, #root {
     opacity: 0;
     transform: translateX(12px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0);
@@ -157,11 +177,23 @@ html, body, #root {
 }
 
 @keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
 }
 
 @keyframes glowPulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.2); }
-  50% { box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); }
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.2);
+  }
+
+  50% {
+    box-shadow: 0 0 0 6px rgba(59, 130, 246, 0);
+  }
 }
