@@ -2,7 +2,7 @@
  * 任务/里程碑详情抽屉面板 — 升级版
  * 卡片式汇总信息 + 依赖管理 + 批量创建
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   Drawer,
   Form,
@@ -19,7 +19,6 @@ import {
   Modal,
 } from 'antd';
 import {
-  SaveOutlined,
   DeleteOutlined,
   PlusOutlined,
   ArrowRightOutlined,
@@ -27,8 +26,9 @@ import {
   ClockCircleOutlined,
 } from '@ant-design/icons';
 import { useGraphStore } from '../stores/graphStore';
-import { updateMilestone } from '../services/api';
-import type { GraphNode, GraphMilestone } from '../services/api';
+import { updateMilestone, fetchMembers } from '../services/api';
+import type { GraphNode, GraphMilestone, Member } from '../services/api';
+import { getAssigneeColor } from '../utils/assigneeColors';
 import dayjs from 'dayjs';
 
 const { TextArea } = Input;
@@ -53,8 +53,19 @@ export default function TaskDrawer() {
   const [msForm] = Form.useForm();
   const [batchText, setBatchText] = useState('');
   const [loading, setLoading] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [members, setMembers] = useState<Member[]>([]);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const msSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const nodeData = getSelectedNode();
+
+  // 加载成员列表
+  useEffect(() => {
+    if (drawerVisible) {
+      fetchMembers().then(setMembers).catch(() => { });
+    }
+  }, [drawerVisible]);
 
   useEffect(() => {
     if (!nodeData) return;
@@ -63,7 +74,7 @@ export default function TaskDrawer() {
       form.setFieldsValue({
         title: task.title,
         description: task.description,
-        assignee: task.assignee,
+        assignee: task.assignee || undefined,
         estimated_hours: task.estimated_hours,
         status: task.status,
         milestone_id: task.milestone_id || undefined,
@@ -79,11 +90,60 @@ export default function TaskDrawer() {
     }
   }, [nodeData, selectedNodeType, form, msForm]);
 
+  // ★ 自动保存 — 任务
+  const autoSaveTask = useCallback(() => {
+    if (!selectedNodeId || selectedNodeType !== 'task') return;
+    const task = getSelectedNode() as GraphNode;
+    if (!task) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    setSaveStatus('saving');
+    saveTimerRef.current = setTimeout(async () => {
+      try {
+        const values = form.getFieldsValue();
+        await editTask(selectedNodeId, {
+          title: values.title,
+          description: values.description,
+          assignee: values.assignee,
+          estimated_hours: values.estimated_hours,
+          status: values.status,
+          milestone_id: values.milestone_id || null,
+          start_date: values.start_date?.format('YYYY-MM-DD'),
+          due_date: values.due_date?.format('YYYY-MM-DD'),
+          version: task.version,
+        });
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('idle'), 2000);
+      } catch {
+        setSaveStatus('error');
+        message.error('自动保存失败');
+      }
+    }, 1500);
+  }, [selectedNodeId, selectedNodeType, form, editTask, getSelectedNode]);
+
+  // ★ 自动保存 — 里程碑
+  const autoSaveMilestone = useCallback(() => {
+    if (!selectedNodeId || selectedNodeType !== 'milestone') return;
+    if (msSaveTimerRef.current) clearTimeout(msSaveTimerRef.current);
+    setSaveStatus('saving');
+    msSaveTimerRef.current = setTimeout(async () => {
+      try {
+        const values = msForm.getFieldsValue();
+        await updateMilestone(selectedNodeId, values);
+        await loadGraphData();
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('idle'), 2000);
+      } catch {
+        setSaveStatus('error');
+        message.error('自动保存失败');
+      }
+    }, 1500);
+  }, [selectedNodeId, selectedNodeType, msForm, loadGraphData]);
+
+  // handleSaveTask 保留用于批量创建后刷新等场景
   const handleSaveTask = async () => {
     if (!selectedNodeId || selectedNodeType !== 'task') return;
     const task = nodeData as GraphNode;
     if (!task) return;
-
     setLoading(true);
     try {
       const values = await form.validateFields();
@@ -98,16 +158,8 @@ export default function TaskDrawer() {
         due_date: values.due_date?.format('YYYY-MM-DD'),
         version: task.version,
       });
-      message.success('保存成功');
-    } catch (err: any) {
-      if (err?.response?.status === 409) {
-        message.error('数据已被修改，请刷新后重试');
-      } else {
-        message.error('保存失败');
-      }
-    } finally {
-      setLoading(false);
-    }
+    } catch { /* skip */ }
+    finally { setLoading(false); }
   };
 
   const handleSaveMilestone = async () => {
@@ -272,6 +324,9 @@ export default function TaskDrawer() {
                 }}>
                   {task.title}
                 </span>
+                {saveStatus === 'saving' && <span style={{ fontSize: 11, color: '#F59E0B', marginLeft: 'auto' }}>保存中...</span>}
+                {saveStatus === 'saved' && <span style={{ fontSize: 11, color: '#10B981', marginLeft: 'auto' }}>✓ 已保存</span>}
+                {saveStatus === 'error' && <span style={{ fontSize: 11, color: '#EF4444', marginLeft: 'auto' }}>保存失败</span>}
               </div>
 
               {/* 进度 + 工时 + 状态 */}
@@ -317,7 +372,9 @@ export default function TaskDrawer() {
 
             {/* 表单区 */}
             <div style={{ padding: '16px 20px' }}>
-              <Form form={form} layout="vertical" size="small" requiredMark={false}>
+              <Form form={form} layout="vertical" size="small" requiredMark={false}
+                onValuesChange={autoSaveTask}
+              >
                 <Form.Item name="title" label="标题" rules={[{ required: true }]}>
                   <Input />
                 </Form.Item>
@@ -325,7 +382,28 @@ export default function TaskDrawer() {
                   <TextArea rows={3} />
                 </Form.Item>
                 <Form.Item name="assignee" label="负责人">
-                  <Input placeholder="输入负责人名称" />
+                  <Select
+                    allowClear
+                    showSearch
+                    placeholder="选择负责人"
+                    optionFilterProp="label"
+                    options={members.map(m => ({
+                      value: m.name,
+                      label: m.name,
+                    }))}
+                    optionRender={(option) => {
+                      const color = getAssigneeColor(option.value as string);
+                      return (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{
+                            width: 12, height: 12, borderRadius: '50%',
+                            background: color, display: 'inline-block', flexShrink: 0,
+                          }} />
+                          <span>{option.label}</span>
+                        </div>
+                      );
+                    }}
+                  />
                 </Form.Item>
                 <Form.Item name="status" label="状态">
                   <Select>
@@ -356,18 +434,6 @@ export default function TaskDrawer() {
                     <DatePicker />
                   </Form.Item>
                 </Space>
-                <Form.Item>
-                  <Button
-                    type="primary"
-                    icon={<SaveOutlined />}
-                    onClick={handleSaveTask}
-                    loading={loading}
-                    block
-                    style={{ borderRadius: 8, height: 36 }}
-                  >
-                    保存修改
-                  </Button>
-                </Form.Item>
               </Form>
 
               {/* 阶段关系 */}
@@ -500,24 +566,14 @@ export default function TaskDrawer() {
             </div>
 
             <div style={{ padding: '16px 20px' }}>
-              <Form form={msForm} layout="vertical" size="small" requiredMark={false}>
+              <Form form={msForm} layout="vertical" size="small" requiredMark={false}
+                onValuesChange={autoSaveMilestone}
+              >
                 <Form.Item name="title" label="标题" rules={[{ required: true }]}>
                   <Input />
                 </Form.Item>
                 <Form.Item name="description" label="描述">
                   <TextArea rows={3} />
-                </Form.Item>
-                <Form.Item>
-                  <Button
-                    type="primary"
-                    icon={<SaveOutlined />}
-                    onClick={handleSaveMilestone}
-                    loading={loading}
-                    block
-                    style={{ borderRadius: 8, height: 36 }}
-                  >
-                    保存里程碑
-                  </Button>
                 </Form.Item>
               </Form>
 

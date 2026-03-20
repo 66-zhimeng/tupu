@@ -143,4 +143,40 @@ export const createDependency = (data: DependencyCreate) =>
 export const deleteDependency = (id: string) =>
   api.delete(`/api/dependencies/${id}`).then(res => res.data);
 
+// ==================== 人员管理 ====================
+
+export interface Member {
+  id: string;
+  name: string;
+  color: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MemberCreate {
+  name: string;
+  color?: string;
+}
+
+export interface MemberUpdate {
+  name?: string;
+  color?: string;
+}
+
+/** 获取所有成员 */
+export const fetchMembers = () =>
+  api.get<Member[]>('/api/members').then(res => res.data);
+
+/** 创建成员 */
+export const createMember = (data: MemberCreate) =>
+  api.post<Member>('/api/members', data).then(res => res.data);
+
+/** 更新成员 */
+export const updateMember = (id: string, data: MemberUpdate) =>
+  api.put<Member>(`/api/members/${id}`, data).then(res => res.data);
+
+/** 删除成员 */
+export const deleteMember = (id: string) =>
+  api.delete(`/api/members/${id}`).then(res => res.data);
+
 export default api;

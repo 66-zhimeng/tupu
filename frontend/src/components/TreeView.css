@@ -1,0 +1,419 @@
+/* TreeView — WPS 风格组织架构树 */
+
+.tree-view {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: var(--canvas-bg);
+}
+
+/* 工具栏 */
+.tree-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    background: var(--color-bg-card);
+    border-bottom: 1px solid var(--color-border);
+    gap: 12px;
+}
+
+.tree-toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tree-mode-switch {
+    display: flex;
+    background: var(--color-bg);
+    border-radius: var(--radius-md);
+    padding: 2px;
+    border: 1px solid var(--color-border);
+}
+
+.tree-mode-btn {
+    padding: 5px 14px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    background: transparent;
+    border: none;
+    border-radius: calc(var(--radius-md) - 2px);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    font-family: var(--font-sans);
+    white-space: nowrap;
+}
+
+.tree-mode-btn.active {
+    background: var(--color-bg-card);
+    color: var(--color-text);
+    font-weight: 600;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.tree-mode-btn:hover:not(.active) {
+    color: var(--color-text);
+}
+
+.tree-count {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    font-family: var(--font-mono);
+    padding: 2px 8px;
+    border-radius: var(--radius-pill);
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+}
+
+/* 画布区域 */
+.tree-canvas {
+    flex: 1;
+    overflow: hidden;
+    padding: 24px;
+    display: flex;
+    justify-content: center;
+    cursor: grab;
+    user-select: none;
+}
+
+.tree-canvas:active {
+    cursor: grabbing;
+}
+
+/* ★ 顶层分支包裹容器（背景色区分） */
+.tree-branch-wrapper {
+    transition: box-shadow var(--transition-fast);
+}
+
+.tree-branch-wrapper:hover {
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+
+.tree-branch-wrapper.horizontal {
+    align-self: flex-start;
+}
+
+/* ============================================================
+   纵向布局（默认）
+   ============================================================ */
+
+.tree-root {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+
+/* 分支 + 连线 */
+.tree-branch {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+}
+
+.tree-children {
+    display: flex;
+    gap: 16px;
+    padding-top: 24px;
+    position: relative;
+}
+
+/* 子节点连线 — 用 ::before 和 ::after 画 */
+.tree-children::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 0;
+    height: 12px;
+    border-left: 2px solid var(--color-border);
+}
+
+.tree-children>.tree-branch::before {
+    content: '';
+    position: absolute;
+    top: -12px;
+    left: 50%;
+    width: 0;
+    height: 12px;
+    border-left: 2px solid var(--color-border);
+}
+
+/* 水平连线 */
+.tree-children>.tree-branch:not(:only-child)::after {
+    content: '';
+    position: absolute;
+    top: -12px;
+    height: 0;
+    border-top: 2px solid var(--color-border);
+}
+
+.tree-children>.tree-branch:first-child:not(:only-child)::after {
+    left: 50%;
+    right: 0;
+    width: 50%;
+}
+
+.tree-children>.tree-branch:last-child:not(:only-child)::after {
+    right: 50%;
+    left: 0;
+    width: 50%;
+}
+
+.tree-children>.tree-branch:not(:first-child):not(:last-child)::after {
+    left: 0;
+    right: 0;
+    width: 100%;
+}
+
+/* ============================================================
+   横向布局（左→右） — .horizontal 覆盖
+   ============================================================ */
+
+.tree-root.horizontal {
+    flex-direction: row;
+    align-items: flex-start;
+}
+
+.tree-branch.horizontal {
+    flex-direction: row;
+    align-items: center;
+}
+
+.tree-children.horizontal {
+    flex-direction: column;
+    gap: 20px;
+    padding-top: 0;
+    padding-left: 32px;
+}
+
+/* === 横向连线：父→子水平线 === */
+
+/* 父节点右侧出线（向右短横线） */
+.tree-children.horizontal::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 16px;
+    height: 0;
+    border-left: none;
+    border-top: 2px solid var(--color-border);
+}
+
+/* 子节点左侧入线（向左短横线） */
+.tree-children.horizontal>.tree-branch::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: -16px;
+    width: 16px;
+    height: 0;
+    border-left: none;
+    border-top: 2px solid var(--color-border);
+}
+
+/* 同级兄弟之间的纵向连线 */
+.tree-children.horizontal>.tree-branch:not(:only-child)::after {
+    content: '';
+    position: absolute;
+    left: -16px;
+    top: 0;
+    bottom: 0;
+    width: 0;
+    height: auto;
+    border-top: none;
+    border-left: 2px solid var(--color-border);
+}
+
+/* 第一个子节点：纵向线从中间向下 */
+.tree-children.horizontal>.tree-branch:first-child:not(:only-child)::after {
+    top: 50%;
+    bottom: 0;
+    left: -16px;
+    right: auto;
+    width: 0;
+    height: auto;
+}
+
+/* 最后一个子节点：纵向线从上到中间 */
+.tree-children.horizontal>.tree-branch:last-child:not(:only-child)::after {
+    top: 0;
+    bottom: 50%;
+    left: -16px;
+    right: auto;
+    width: 0;
+    height: auto;
+}
+
+/* 中间子节点：纵向线贯穿 */
+.tree-children.horizontal>.tree-branch:not(:first-child):not(:last-child)::after {
+    top: 0;
+    bottom: 0;
+    left: -16px;
+    right: auto;
+    width: 0;
+    height: auto;
+}
+
+/* ============================================================
+   卡片样式（纵向/横向通用）
+   ============================================================ */
+
+.tree-card {
+    min-width: 160px;
+    max-width: 220px;
+    padding: 12px 14px;
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-left: 3px solid var(--node-color, var(--color-primary));
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    box-shadow: var(--shadow-xs);
+    flex-shrink: 0;
+}
+
+.tree-card:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+    border-color: var(--node-color, var(--color-primary));
+}
+
+.tree-card.done {
+    background: linear-gradient(135deg, #F0FDF4, #ECFDF5);
+}
+
+.tree-card.cancelled {
+    opacity: 0.5;
+}
+
+.tree-card.unassigned {
+    border-left-style: dashed;
+    border-left-color: var(--color-text-muted);
+}
+
+/* 卡片内容 */
+.tree-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.tree-card-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text);
+    line-height: 1.3;
+    word-break: break-all;
+}
+
+.tree-card-badge {
+    flex-shrink: 0;
+    font-size: 10px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    background: var(--color-bg);
+    color: var(--color-text-muted);
+    padding: 1px 6px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--color-border);
+}
+
+.tree-card-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    margin-bottom: 6px;
+}
+
+.tree-card-assignee {
+    font-weight: 600;
+    font-size: 11px;
+}
+
+.tree-card-unassigned {
+    color: #F59E0B;
+    font-weight: 600;
+    font-size: 11px;
+}
+
+.tree-card-progress {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 11px;
+}
+
+/* 进度条 */
+.tree-card-bar {
+    height: 3px;
+    border-radius: 2px;
+    background: var(--color-bg);
+    overflow: hidden;
+}
+
+.tree-card-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width var(--transition-smooth);
+}
+
+.tree-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    color: var(--color-text-muted);
+    font-size: 14px;
+}
+
+/* 工具栏右侧 */
+.tree-toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tree-zoom-label {
+    font-size: 11px;
+    font-family: var(--font-mono);
+    color: var(--color-text-secondary);
+    padding: 2px 6px;
+    background: var(--color-bg);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+}
+
+.tree-zoom-reset {
+    font-size: 11px;
+    color: var(--color-primary);
+    background: transparent;
+    border: 1px solid var(--color-primary);
+    border-radius: var(--radius-sm);
+    padding: 2px 8px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    font-family: var(--font-sans);
+}
+
+.tree-zoom-reset:hover {
+    background: var(--color-primary);
+    color: white;
+}
+
+.tree-zoom-hint {
+    position: absolute;
+    bottom: 12px;
+    right: 20px;
+    font-size: 11px;
+    color: var(--color-text-muted);
+    opacity: 0.6;
+    pointer-events: none;
+}

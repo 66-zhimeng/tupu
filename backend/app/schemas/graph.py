@@ -58,3 +58,4 @@ class GraphDataResponse(BaseModel):
     milestones: List[GraphMilestone] = []
     edges: List[GraphEdge] = []
     assignees: List[str] = []
+    members: List[dict] = []

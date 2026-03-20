@@ -2,7 +2,7 @@
  * 左侧树状任务面板
  * 递归显示完整任务层级，可展开/折叠，点击导航到对应层级
  */
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import {
     HomeOutlined,
     FolderOpenOutlined,
@@ -13,6 +13,8 @@ import {
     CaretRightOutlined,
     CaretDownOutlined,
     CheckCircleFilled,
+    NodeExpandOutlined,
+    NodeCollapseOutlined,
 } from '@ant-design/icons';
 import { useGraphStore } from '../stores/graphStore';
 import type { GraphNode } from '../services/api';
@@ -119,31 +121,26 @@ export default function SidebarTree() {
     } = useGraphStore();
 
     const [collapsed, setCollapsed] = useState(false);
-    const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
-    // 顶层节点
-    const rootNodes = useMemo(
-        () => graphData?.nodes.filter(n => !n.parent_id) || [],
-        [graphData],
-    );
-
-    // 自动展开当前路径
-    useMemo(() => {
-        if (!graphData || !currentParentId) return;
-        // 找到从根到当前节点的路径，全部展开
-        const path = new Set<string>();
-        let cur: string | null | undefined = currentParentId;
-        while (cur) {
-            path.add(cur);
-            const node = graphData.nodes.find(n => n.id === cur);
-            cur = node?.parent_id;
+    // ★ 计算所有有子节点的 id（用于全部展开）
+    const allExpandableIds = useMemo(() => {
+        if (!graphData) return new Set<string>();
+        const ids = new Set<string>();
+        for (const node of graphData.nodes) {
+            if (graphData.nodes.some(n => n.parent_id === node.id)) {
+                ids.add(node.id);
+            }
         }
-        setExpandedIds(prev => {
-            const next = new Set(prev);
-            path.forEach(id => next.add(id));
-            return next;
-        });
-    }, [currentParentId, graphData]);
+        return ids;
+    }, [graphData]);
+
+    // ★ 默认全部展开
+    const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+    useMemo(() => {
+        if (allExpandableIds.size > 0) {
+            setExpandedIds(new Set(allExpandableIds));
+        }
+    }, [allExpandableIds]);
 
     const toggleExpand = (id: string) => {
         setExpandedIds(prev => {
@@ -154,6 +151,14 @@ export default function SidebarTree() {
         });
     };
 
+    const expandAll = useCallback(() => {
+        setExpandedIds(new Set(allExpandableIds));
+    }, [allExpandableIds]);
+
+    const collapseAll = useCallback(() => {
+        setExpandedIds(new Set());
+    }, []);
+
     const handleNavigate = (nodeId: string, hasChildren: boolean) => {
         if (hasChildren) {
             drillDown(nodeId);
@@ -162,12 +167,29 @@ export default function SidebarTree() {
         }
     };
 
+    // 顶层节点
+    const rootNodes = useMemo(
+        () => graphData?.nodes.filter(n => !n.parent_id) || [],
+        [graphData],
+    );
+
     if (!graphData) return null;
+
+    const isAllExpanded = expandedIds.size >= allExpandableIds.size;
 
     return (
         <div className={`sidebar-tree ${collapsed ? 'collapsed' : ''}`}>
             <div className="sidebar-header">
                 {!collapsed && <span className="sidebar-title">任务树</span>}
+                {!collapsed && (
+                    <button
+                        className="sidebar-expand-btn"
+                        onClick={isAllExpanded ? collapseAll : expandAll}
+                        title={isAllExpanded ? '全部折叠' : '全部展开'}
+                    >
+                        {isAllExpanded ? <NodeCollapseOutlined /> : <NodeExpandOutlined />}
+                    </button>
+                )}
                 <button
                     className="sidebar-collapse-btn"
                     onClick={() => setCollapsed(!collapsed)}

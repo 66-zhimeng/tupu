@@ -1,19 +1,26 @@
 /**
  * 通用设置对话框 — Tab 式布局
  * Tab 1: LLM 配置（Provider / API Key / Base URL / Model / 测试）
+ * Tab 2: 人员管理（CRUD + 颜色管理）
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
     Modal, Tabs, Form, Input, Select, Button, Space, Alert, Spin, Slider, Switch,
+    message, Popconfirm, Tooltip,
 } from 'antd';
 import {
     ApiOutlined, CheckCircleOutlined, CloseCircleOutlined,
-    SettingOutlined,
+    SettingOutlined, PlusOutlined, DeleteOutlined, TeamOutlined,
 } from '@ant-design/icons';
 import {
     getLLMConfig, saveLLMConfig, testLLMConnection,
     type LLMConfig, type LLMConfigCreate, type LLMTestResult,
 } from '../services/llmApi';
+import {
+    fetchMembers, createMember, updateMember, deleteMember,
+    type Member,
+} from '../services/api';
+import { PRESET_COLORS, initFromMembers } from '../utils/assigneeColors';
 import './SettingsDialog.css';
 
 interface Props {
@@ -33,6 +40,181 @@ const PROVIDER_DEFAULTS: Record<string, { base_url: string; model_name: string }
     dify: { base_url: 'https://api.dify.ai', model_name: 'workflow' },
 };
 
+/* ===== 人员管理子组件 ===== */
+function MemberManagementTab() {
+    const [members, setMembers] = useState<Member[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [newName, setNewName] = useState('');
+    const [newColor, setNewColor] = useState(PRESET_COLORS[0]);
+    const [adding, setAdding] = useState(false);
+    // 编辑中的成员颜色（id → color）
+    const [editingColor, setEditingColor] = useState<Record<string, string>>({});
+
+    const loadMembers = useCallback(async () => {
+        setLoading(true);
+        try {
+            const data = await fetchMembers();
+            setMembers(data);
+            initFromMembers(data);
+        } catch {
+            message.error('加载人员列表失败');
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => { loadMembers(); }, [loadMembers]);
+
+    const handleAdd = async () => {
+        const name = newName.trim();
+        if (!name) { message.warning('请输入成员名称'); return; }
+        setAdding(true);
+        try {
+            await createMember({ name, color: newColor });
+            setNewName('');
+            setNewColor(PRESET_COLORS[(members.length + 1) % PRESET_COLORS.length]);
+            await loadMembers();
+            message.success(`已添加成员「${name}」`);
+        } catch (err: any) {
+            message.error(err?.response?.data?.detail || '添加失败');
+        } finally {
+            setAdding(false);
+        }
+    };
+
+    const handleDelete = async (id: string, name: string) => {
+        try {
+            await deleteMember(id);
+            await loadMembers();
+            message.success(`已删除成员「${name}」`);
+        } catch {
+            message.error('删除失败');
+        }
+    };
+
+    const handleColorChange = async (id: string, color: string) => {
+        setEditingColor(prev => ({ ...prev, [id]: color }));
+        try {
+            await updateMember(id, { color });
+            await loadMembers();
+        } catch {
+            message.error('更新颜色失败');
+        }
+    };
+
+    return (
+        <Spin spinning={loading}>
+            <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 13, color: '#666', marginBottom: 12 }}>
+                    管理团队成员及其专属颜色。颜色用于图谱节点和饼图着色。
+                </div>
+
+                {/* 添加新成员 */}
+                <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                    <Input
+                        placeholder="输入成员名称"
+                        value={newName}
+                        onChange={e => setNewName(e.target.value)}
+                        onPressEnter={handleAdd}
+                        style={{ flex: 1 }}
+                    />
+                    <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+                        {PRESET_COLORS.slice(0, 6).map(c => (
+                            <Tooltip key={c} title={c}>
+                                <div
+                                    onClick={() => setNewColor(c)}
+                                    style={{
+                                        width: 20, height: 20, borderRadius: '50%',
+                                        background: c, cursor: 'pointer',
+                                        border: newColor === c ? '2px solid #09090B' : '2px solid transparent',
+                                        transition: 'border 0.15s',
+                                    }}
+                                />
+                            </Tooltip>
+                        ))}
+                    </div>
+                    <Button
+                        type="primary"
+                        icon={<PlusOutlined />}
+                        onClick={handleAdd}
+                        loading={adding}
+                    >
+                        添加
+                    </Button>
+                </div>
+
+                {/* 成员列表 */}
+                {members.length === 0 && !loading ? (
+                    <div style={{ textAlign: 'center', color: '#999', padding: '20px 0' }}>
+                        暂无成员，请先添加
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {members.map(m => (
+                            <div
+                                key={m.id}
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: 10,
+                                    padding: '8px 12px', borderRadius: 8,
+                                    background: '#FAFAFA', border: '1px solid #F0F0F0',
+                                    transition: 'background 0.15s',
+                                }}
+                            >
+                                {/* 颜色圆点 */}
+                                <div
+                                    style={{
+                                        width: 28, height: 28, borderRadius: '50%',
+                                        background: editingColor[m.id] || m.color,
+                                        flexShrink: 0,
+                                        boxShadow: `0 2px 6px ${(editingColor[m.id] || m.color)}40`,
+                                    }}
+                                />
+                                {/* 名称 */}
+                                <span style={{ flex: 1, fontWeight: 500, fontSize: 14 }}>
+                                    {m.name}
+                                </span>
+                                {/* 颜色调色板 */}
+                                <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                                    {PRESET_COLORS.map(c => (
+                                        <Tooltip key={c} title={c}>
+                                            <div
+                                                onClick={() => handleColorChange(m.id, c)}
+                                                style={{
+                                                    width: 16, height: 16, borderRadius: '50%',
+                                                    background: c, cursor: 'pointer',
+                                                    border: (editingColor[m.id] || m.color) === c
+                                                        ? '2px solid #09090B' : '1px solid #E4E4E7',
+                                                    transition: 'border 0.15s',
+                                                }}
+                                            />
+                                        </Tooltip>
+                                    ))}
+                                </div>
+                                {/* 删除 */}
+                                <Popconfirm
+                                    title={`确定删除「${m.name}」？`}
+                                    onConfirm={() => handleDelete(m.id, m.name)}
+                                    okText="删除"
+                                    cancelText="取消"
+                                    okButtonProps={{ danger: true }}
+                                >
+                                    <Button
+                                        type="text"
+                                        size="small"
+                                        danger
+                                        icon={<DeleteOutlined />}
+                                    />
+                                </Popconfirm>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </Spin>
+    );
+}
+
+/* ===== 主组件 ===== */
 export default function SettingsDialog({ open, onClose }: Props) {
     const [form] = Form.useForm();
     const [loading, setLoading] = useState(false);
@@ -221,7 +403,7 @@ export default function SettingsDialog({ open, onClose }: Props) {
             open={open}
             onCancel={onClose}
             footer={null}
-            width={520}
+            width={600}
             destroyOnClose
             className="settings-dialog"
         >
@@ -233,13 +415,11 @@ export default function SettingsDialog({ open, onClose }: Props) {
                         children: llmTab,
                     },
                     {
-                        key: 'general',
-                        label: '⚙ 通用',
-                        children: (
-                            <div style={{ padding: '20px 0', textAlign: 'center', color: '#999' }}>
-                                更多设置即将推出...
-                            </div>
+                        key: 'members',
+                        label: (
+                            <span><TeamOutlined style={{ marginRight: 4 }} />人员管理</span>
                         ),
+                        children: <MemberManagementTab />,
                     },
                 ]}
             />

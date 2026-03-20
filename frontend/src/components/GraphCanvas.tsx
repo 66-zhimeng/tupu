@@ -7,12 +7,15 @@
  * - 双击钻入子层级
  * - 位置缓存：跨层级保留节点位置
  */
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Graph } from '@antv/g6';
 import { message } from 'antd';
 import { useGraphStore } from '../stores/graphStore';
 import type { GraphNode, GraphMilestone } from '../services/api';
 import { getLayoutConfig, importLayout, exportLayout, type LayoutName, type PositionMap } from '../utils/layoutEngine';
+import { getAssigneeColor, isAssigned, UNASSIGNED_COLOR } from '../utils/assigneeColors';
+import Breadcrumb from './Breadcrumb';
+import TreeView from './TreeView';
 import './GraphCanvas.css';
 
 /* ===== 辅助函数 ===== */
@@ -37,56 +40,63 @@ function nodeRadius(hours: number): number {
   return Math.min(max, min + Math.log2(hours + 1) * 8);
 }
 
-/** 生成环形饼图 SVG data URL（中间留空显示标签文字） */
-function buildPieSvgUrl(slices: { completed: boolean; status: string }[], radius: number): string {
+/** 生成环形饼图 SVG data URL（按负责人着色） */
+function buildPieSvgUrl(slices: { completed: boolean; status: string; assignee?: string | null }[], radius: number): string {
   if (slices.length === 0) return '';
   const size = radius * 2;
   const cx = radius, cy = radius;
-  const rOuter = radius - 2;          // 外半径
-  const rInner = radius * 0.45;       // 内半径 — 留出中心给文字
+  const rOuter = radius - 2;
+  const rInner = radius * 0.45;
   const n = slices.length;
 
-  // 颜色方案 — 高对比度
-  const COLOR_DONE = '#10B981'; // 鲜绿
-  const COLOR_TODO = '#CBD5E1'; // 蓝灰
-  const COLOR_CANCEL = '#E2E8F0'; // 浅灰
+  // 颜色逻辑：已完成 → 负责人色（实心），未完成 → 负责人色半透明，已取消 → 淡灰
+  function getSliceFill(s: { completed: boolean; status: string; assignee?: string | null }): string {
+    if (s.status === '已取消') return '#E2E8F0';
+    const baseColor = getAssigneeColor(s.assignee);
+    if (s.completed || s.status === '已完成') return baseColor;
+    // 未完成：用更淡的版本
+    return baseColor + '40'; // 25% opacity
+  }
+
+  function getSliceStroke(s: { assignee?: string | null }): string {
+    return isAssigned(s.assignee) ? 'white' : '#A1A1AA';
+  }
+
+  function getSliceStrokeDash(s: { assignee?: string | null }): string {
+    return isAssigned(s.assignee) ? '' : 'stroke-dasharray="4 2"';
+  }
 
   let paths = '';
   if (n === 1) {
     const s = slices[0];
-    const fill = (s.completed || s.status === '已完成') ? COLOR_DONE
-      : s.status === '已取消' ? COLOR_CANCEL : COLOR_TODO;
-    // 外环 + 白色内圆
-    paths = `<circle cx="${cx}" cy="${cy}" r="${rOuter}" fill="${fill}" />`;
+    const fill = getSliceFill(s);
+    paths = `<circle cx="${cx}" cy="${cy}" r="${rOuter}" fill="${fill}" stroke="${getSliceStroke(s)}" stroke-width="1.5" ${getSliceStrokeDash(s)} />`;
     paths += `<circle cx="${cx}" cy="${cy}" r="${rInner}" fill="white" />`;
   } else {
     const gapDeg = 2;
     const sliceDeg = 360 / n;
     for (let i = 0; i < n; i++) {
       const s = slices[i];
-      const fill = (s.completed || s.status === '已完成') ? COLOR_DONE
-        : s.status === '已取消' ? COLOR_CANCEL : COLOR_TODO;
+      const fill = getSliceFill(s);
+      const stroke = getSliceStroke(s);
+      const dashAttr = getSliceStrokeDash(s);
 
       const startDeg = -90 + i * sliceDeg + gapDeg / 2;
       const endDeg = -90 + (i + 1) * sliceDeg - gapDeg / 2;
       const startRad = (startDeg * Math.PI) / 180;
       const endRad = (endDeg * Math.PI) / 180;
 
-      // 外弧端点
       const ox1 = cx + rOuter * Math.cos(startRad);
       const oy1 = cy + rOuter * Math.sin(startRad);
       const ox2 = cx + rOuter * Math.cos(endRad);
       const oy2 = cy + rOuter * Math.sin(endRad);
-      // 内弧端点（反向）
       const ix1 = cx + rInner * Math.cos(endRad);
       const iy1 = cy + rInner * Math.sin(endRad);
       const ix2 = cx + rInner * Math.cos(startRad);
       const iy2 = cy + rInner * Math.sin(startRad);
 
       const largeArc = (endDeg - startDeg) > 180 ? 1 : 0;
-
-      // 环形扇区：外弧 → 直线到内弧 → 内弧（反方向） → 闭合
-      paths += `<path d="M ${ox1} ${oy1} A ${rOuter} ${rOuter} 0 ${largeArc} 1 ${ox2} ${oy2} L ${ix1} ${iy1} A ${rInner} ${rInner} 0 ${largeArc} 0 ${ix2} ${iy2} Z" fill="${fill}" stroke="white" stroke-width="1.5" />`;
+      paths += `<path d="M ${ox1} ${oy1} A ${rOuter} ${rOuter} 0 ${largeArc} 1 ${ox2} ${oy2} L ${ix1} ${iy1} A ${rInner} ${rInner} 0 ${largeArc} 0 ${ix2} ${iy2} Z" fill="${fill}" stroke="${stroke}" stroke-width="1.5" ${dashAttr} />`;
     }
   }
 
@@ -240,6 +250,7 @@ function buildG6Data(
       completed: c.status === '已完成',
       progress: c.computed_progress || 0,
       status: c.status,
+      assignee: c.assignee, // ★ 传递负责人信息给饼图着色
     }));
 
     // 生成 SVG 饼图 data URL
@@ -283,6 +294,7 @@ export default function GraphCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<Graph | null>(null);
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [viewMode, setViewMode] = useState<'graph' | 'tree'>('graph');
 
   const {
     graphData,
@@ -299,11 +311,23 @@ export default function GraphCanvas() {
     positionCache,
   } = useGraphStore();
 
+  // ★ 监听 toggle-view 事件
+  useEffect(() => {
+    const handler = () => setViewMode(v => v === 'graph' ? 'tree' : 'graph');
+    window.addEventListener('toggle-view', handler);
+    return () => window.removeEventListener('toggle-view', handler);
+  }, []);
+
   useEffect(() => { loadGraphData(); }, [loadGraphData]);
 
-  // 初始化 G6
+  // 初始化 G6 — viewMode 切换时重建
   useEffect(() => {
-    if (!containerRef.current || graphRef.current) return;
+    if (!containerRef.current || viewMode !== 'graph') return;
+    // 先销毁旧实例（从 tree 切回时需要重建）
+    if (graphRef.current) {
+      try { graphRef.current.destroy(); } catch { /* ignore */ }
+      graphRef.current = null;
+    }
 
     const graph = new Graph({
       container: containerRef.current,
@@ -373,18 +397,37 @@ export default function GraphCanvas() {
         type: 'circle',
         style: {
           size: (d: any) => (d.data?.nodeRadius || 55) * 2,
-          fill: (d: any) => d.data?.progressColor || '#94A3B8',
-          fillOpacity: (d: any) => d.data?.hasChildren ? 0.05 : 0.15,
+          fill: (d: any) => {
+            // ★ 已完成 → 实心绿
+            if (d.data?.status === '已完成') return '#10B981';
+            if (d.data?.status === '已取消') return '#D4D4D8';
+            if (d.data?.hasChildren) return d.data?.progressColor || '#94A3B8';
+            return getAssigneeColor(d.data?.assignee);
+          },
+          fillOpacity: (d: any) => {
+            if (d.data?.status === '已完成') return 0.85;
+            if (d.data?.status === '已取消') return 0.25;
+            return d.data?.hasChildren ? 0.05 : 0.15;
+          },
           stroke: (d: any) => {
+            if (d.data?.status === '已完成') return '#059669';
+            if (d.data?.status === '已取消') return '#A1A1AA';
             if (d.data?.due_date && d.data?.status === '未完成') {
               if (new Date() > new Date(d.data.due_date)) return '#EF4444';
             }
+            if (!d.data?.hasChildren) {
+              return getAssigneeColor(d.data?.assignee);
+            }
             return d.data?.progressColor || '#E8E8E8';
           },
-          lineWidth: 2,
-          opacity: (d: any) => (d.data?.status === '已取消' ? 0.35 : 1),
+          lineWidth: (d: any) => {
+            if (d.data?.status === '已完成') return 2.5;
+            return !d.data?.hasChildren && !isAssigned(d.data?.assignee) ? 2 : 2;
+          },
+          lineDash: (d: any) => !d.data?.hasChildren && !isAssigned(d.data?.assignee) ? [4, 3] : undefined,
+          opacity: (d: any) => (d.data?.status === '已取消' ? 0.4 : 1),
           pointerEvents: 'auto',
-          shadowColor: (d: any) => (d.data?.progressColor || '#94A3B8') + '18',
+          shadowColor: (d: any) => (getAssigneeColor(d.data?.assignee) || '#94A3B8') + '18',
           shadowBlur: 8,
           shadowOffsetY: 2,
 
@@ -393,19 +436,25 @@ export default function GraphCanvas() {
           iconWidth: (d: any) => d.data?.pieSvg ? (d.data?.nodeRadius || 55) * 2 - 4 : 0,
           iconHeight: (d: any) => d.data?.pieSvg ? (d.data?.nodeRadius || 55) * 2 - 4 : 0,
 
-          labelText: (d: any) => {
-            const label = d.data?.label || '';
-            if (d.data?.hasChildren) return `${label}\n${d.data.childCount} 子任务`;
-            return label;
+          labelText: (d: any) => d.data?.label || '',
+          labelFill: (d: any) => d.data?.status === '已完成' ? '#065F46' : '#09090B',
+          labelFontSize: (d: any) => {
+            if (d.data?.hasChildren) return 14;
+            return 13;
           },
-          labelFill: (d: any) => d.data?.hasChildren ? '#111' : '#333',
-          labelFontSize: (d: any) => Math.max(11, Math.min(16, Math.round((d.data?.nodeRadius || 55) * 0.22))),
-          labelFontWeight: (d: any) => d.data?.hasChildren ? 700 : 600,
-          labelPlacement: 'center',
+          labelFontWeight: 600,
+          labelPlacement: 'bottom',
           labelWordWrap: true,
-          labelMaxWidth: (d: any) => (d.data?.nodeRadius || 55) * 1.5,
-          labelMaxLines: 3,
+          labelMaxWidth: 150,
+          labelMaxLines: 2,
           labelFontFamily: "'Space Grotesk', 'Inter', sans-serif",
+          labelBackground: true,
+          labelBackgroundFill: 'rgba(255,255,255,0.95)',
+          labelBackgroundStroke: '#E4E4E7',
+          labelBackgroundLineWidth: 1,
+          labelBackgroundRadius: 6,
+          labelPadding: [4, 10, 4, 10],
+          labelOffsetY: 10,
 
           port: true,
           ports: Array.from({ length: 12 }, (_, i) => {
@@ -423,23 +472,23 @@ export default function GraphCanvas() {
         },
       },
 
-      // 边样式
+      // 边样式（加粗 + 大箭头）
       edge: {
         type: 'cubic',
         style: {
-          stroke: (d: any) => d.data?.edgeType === 'iterative' ? '#F59E0B' : '#AAAAAA',
-          lineWidth: (d: any) => d.data?.edgeType === 'iterative' ? 2.5 : 1.5,
-          lineDash: (d: any) => d.data?.edgeType === 'iterative' ? [6, 4] : undefined,
-          opacity: 0.7,
+          stroke: (d: any) => d.data?.edgeType === 'iterative' ? '#F59E0B' : '#888888',
+          lineWidth: (d: any) => d.data?.edgeType === 'iterative' ? 3.5 : 3,
+          lineDash: (d: any) => d.data?.edgeType === 'iterative' ? [8, 4] : undefined,
+          opacity: 0.85,
           endArrow: true,
-          endArrowSize: 8,
-          endArrowFill: (d: any) => d.data?.edgeType === 'iterative' ? '#F59E0B' : '#AAAAAA',
+          endArrowSize: 12,
+          endArrowFill: (d: any) => d.data?.edgeType === 'iterative' ? '#F59E0B' : '#888888',
           labelText: (d: any) => {
             if (d.data?.edgeType === 'iterative' && d.data?.iterationCount > 0) return `×${d.data.iterationCount}`;
             return '';
           },
           labelFill: '#F59E0B',
-          labelFontSize: 10,
+          labelFontSize: 11,
           labelFontWeight: 600,
           labelFontFamily: "'JetBrains Mono', monospace",
           labelBackground: true,
@@ -595,10 +644,10 @@ export default function GraphCanvas() {
     return () => {
       if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
       setGraphInstance(null);
-      graph.destroy();
+      try { graph.destroy(); } catch { /* ignore */ }
       graphRef.current = null;
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [viewMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ★ 浏览器窗口/容器大小变化 → 自动调整画布
   useEffect(() => {
@@ -736,20 +785,29 @@ export default function GraphCanvas() {
         </div>
       )}
 
-      {/* 操作提示 */}
-      <div className="canvas-hint">
-        {enableConnect
-          ? '🔗 连线模式 — 点击源节点再点击目标节点创建依赖'
-          : '双击展开子任务 · 单击编辑 · 滚轮缩放 · 右键菜单'}
-      </div>
+      {/* 面包屑层级导航 */}
+      <Breadcrumb />
 
-      {/* G6 画布容器 */}
-      <div
-        ref={containerRef}
-        id="graph-canvas"
-        onContextMenu={(e) => e.preventDefault()}
-        className="canvas-container"
-      />
+      {viewMode === 'tree' ? (
+        <TreeView />
+      ) : (
+        <>
+          {/* 操作提示 */}
+          <div className="canvas-hint">
+            {enableConnect
+              ? '🔗 连线模式 — 点击源节点再点击目标节点创建依赖'
+              : '双击展开子任务 · 单击编辑 · 滚轮缩放 · 右键菜单'}
+          </div>
+
+          {/* G6 画布容器 */}
+          <div
+            ref={containerRef}
+            id="graph-canvas"
+            onContextMenu={(e) => e.preventDefault()}
+            className="canvas-container"
+          />
+        </>
+      )}
     </div>
   );
 }

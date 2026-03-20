@@ -175,6 +175,15 @@ export default function TopBar() {
         <Dropdown menu={{ items: layoutMenuItems }} trigger={['click']}>
           <Button className="toolbar-btn">📐 布局</Button>
         </Dropdown>
+
+        <Tooltip title="切换图/树视图">
+          <Button
+            className="toolbar-btn"
+            onClick={() => window.dispatchEvent(new CustomEvent('toggle-view'))}
+          >
+            🌲 树图
+          </Button>
+        </Tooltip>
       </div>
 
       {/* 右侧：AI + 设置 + 状态 + 刷新 */}

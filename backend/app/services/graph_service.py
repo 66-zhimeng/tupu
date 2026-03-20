@@ -6,6 +6,7 @@ from app.models.task import TaskStatus
 from app.services.task_service import TaskService
 from app.services.milestone_service import MilestoneService
 from app.services.dependency_service import DependencyService
+from app.services import member_service
 from app.schemas.graph import GraphNode, GraphMilestone, GraphEdge, GraphDataResponse
 
 
@@ -26,6 +27,8 @@ class GraphService:
         deps = await DependencyService.get_all(db)
         # 获取负责人列表
         assignees = await TaskService.get_all_assignees(db)
+        # 获取所有成员
+        members = await member_service.list_members(db)
 
         # 判断哪些任务有子任务
         parent_ids = {t.parent_id for t in tasks if t.parent_id}
@@ -111,4 +114,5 @@ class GraphService:
             milestones=milestone_nodes,
             edges=edges,
             assignees=assignees,
+            members=[{"id": str(m.id), "name": m.name, "color": m.color} for m in members],
         )
