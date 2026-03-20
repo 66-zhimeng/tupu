@@ -1,7 +1,7 @@
 /**
- * 树状结构图组件 — WPS 风格组织架构图
+ * 树状结构图组件 — 横向组织架构图
  *
- * 纯 HTML/CSS 实现，支持纵向（上→下）和横向（左→右）两种布局。
+ * 纯 HTML/CSS 实现，父→子从左到右展开，同级任务从上到下排列。
  * 支持两种数据模式：
  * - current: 当前层级的直接子节点
  * - all: 全部层级递归展开
@@ -48,8 +48,7 @@ const BRANCH_BORDER_COLORS = [
 
 export default function TreeView() {
     const { graphData, currentParentId, selectNode, drillDown } = useGraphStore();
-    const [mode, setMode] = useState<'current' | 'all'>('current');
-    const [direction, setDirection] = useState<'vertical' | 'horizontal'>('vertical');
+    const [mode, setMode] = useState<'current' | 'all'>('all');
     const [scale, setScale] = useState(1);
     const canvasRef = useRef<HTMLDivElement>(null);
 
@@ -59,7 +58,6 @@ export default function TreeView() {
     const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
 
     const handleMouseDown = useCallback((e: React.MouseEvent) => {
-        // 左键或中键均可拖拽（使用移动距离阈值区分点击与拖拽）
         if (e.button === 0 || e.button === 1) {
             isPanningRef.current = true;
             panStartRef.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
@@ -70,7 +68,6 @@ export default function TreeView() {
         if (!isPanningRef.current) return;
         const dx = e.clientX - panStartRef.current.x;
         const dy = e.clientY - panStartRef.current.y;
-        // 5px 阈值：超过才开始平移（区分点击和拖拽）
         if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
             if (canvasRef.current) canvasRef.current.style.cursor = 'grabbing';
             setPan({ x: panStartRef.current.panX + dx, y: panStartRef.current.panY + dy });
@@ -88,7 +85,7 @@ export default function TreeView() {
             e.preventDefault();
             setScale(prev => {
                 const delta = e.deltaY > 0 ? -0.08 : 0.08;
-                return Math.max(0.3, Math.min(2.0, prev + delta));
+                return Math.max(0.2, Math.min(3.0, prev + delta));
             });
         }
     }, []);
@@ -111,10 +108,8 @@ export default function TreeView() {
         ? buildTree(currentParentId)
         : buildTree(null);
 
-    const isHorizontal = direction === 'horizontal';
-
     // 渲染单个节点
-    function renderNode(item: TreeNodeData, depth: number, branchColorIndex?: number): React.ReactNode {
+    function renderNode(item: TreeNodeData, depth: number): React.ReactNode {
         const { node, children } = item;
         const color = getAssigneeColor(node.assignee);
         const unassigned = !isAssigned(node.assignee);
@@ -126,7 +121,7 @@ export default function TreeView() {
         const directChildren = graphData!.nodes.filter(n => n.parent_id === node.id);
 
         return (
-            <div className={`tree-branch ${isHorizontal ? 'horizontal' : ''}`} key={node.id}>
+            <div className="tree-branch" key={node.id}>
                 <div
                     className={`tree-card ${isDone ? 'done' : ''} ${isCancelled ? 'cancelled' : ''} ${unassigned ? 'unassigned' : ''}`}
                     style={{
@@ -154,6 +149,12 @@ export default function TreeView() {
                             {progress}%
                         </span>
                     </div>
+                    {/* 工时 */}
+                    {node.computed_hours > 0 && (
+                        <div className="tree-card-hours">
+                            ⏱ {node.computed_hours}人天
+                        </div>
+                    )}
                     {/* 进度条 */}
                     <div className="tree-card-bar">
                         <div
@@ -163,8 +164,8 @@ export default function TreeView() {
                     </div>
                 </div>
                 {children.length > 0 && (
-                    <div className={`tree-children ${isHorizontal ? 'horizontal' : ''}`}>
-                        {children.map(child => renderNode(child, depth + 1, branchColorIndex))}
+                    <div className="tree-children">
+                        {children.map(child => renderNode(child, depth + 1))}
                     </div>
                 )}
             </div>
@@ -179,17 +180,22 @@ export default function TreeView() {
         return (
             <div
                 key={item.node.id}
-                className={`tree-branch-wrapper ${isHorizontal ? 'horizontal' : ''}`}
+                className="tree-branch-wrapper"
                 style={{
                     background: bgColor,
                     border: `1px solid ${borderColor}`,
                     borderRadius: 12,
-                    padding: isHorizontal ? '16px 20px' : '20px 16px',
+                    padding: '16px 20px',
                 }}
             >
-                {renderNode(item, 0, index)}
+                {renderNode(item, 0)}
             </div>
         );
+    }
+
+    // 统计节点总数
+    function countNodes(items: TreeNodeData[]): number {
+        return items.reduce((sum, item) => sum + 1 + countNodes(item.children), 0);
     }
 
     return (
@@ -211,22 +217,6 @@ export default function TreeView() {
                             全部层级
                         </button>
                     </div>
-                    <div className="tree-mode-switch">
-                        <button
-                            className={`tree-mode-btn ${direction === 'vertical' ? 'active' : ''}`}
-                            onClick={() => setDirection('vertical')}
-                            title="纵向布局"
-                        >
-                            ↕ 纵向
-                        </button>
-                        <button
-                            className={`tree-mode-btn ${direction === 'horizontal' ? 'active' : ''}`}
-                            onClick={() => setDirection('horizontal')}
-                            title="横向布局"
-                        >
-                            ↔ 横向
-                        </button>
-                    </div>
                 </div>
                 <div className="tree-toolbar-right">
                     <span className="tree-zoom-label">{Math.round(scale * 100)}%</span>
@@ -235,7 +225,7 @@ export default function TreeView() {
                             重置
                         </button>
                     )}
-                    <span className="tree-count">{tree.length} 个节点</span>
+                    <span className="tree-count">{countNodes(tree)} 个节点</span>
                 </div>
             </div>
 
@@ -253,10 +243,10 @@ export default function TreeView() {
                     <div className="tree-empty">此层级暂无任务</div>
                 ) : (
                     <div
-                        className={`tree-root ${isHorizontal ? 'horizontal' : ''}`}
+                        className="tree-root"
                         style={{
                             transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
-                            transformOrigin: isHorizontal ? 'top left' : 'top center',
+                            transformOrigin: 'top left',
                         }}
                     >
                         {tree.map((item, idx) => renderTopBranch(item, idx))}
