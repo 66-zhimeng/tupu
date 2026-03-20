@@ -104,6 +104,62 @@
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
 
+/* ★ 拖拽手柄 */
+.tree-branch-handle {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: grab;
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity 0.15s ease, background 0.15s ease;
+    z-index: 2;
+}
+
+.tree-branch-wrapper {
+    position: relative;
+}
+
+.tree-branch-wrapper:hover .tree-branch-handle {
+    opacity: 0.5;
+}
+
+.tree-branch-handle:hover {
+    opacity: 1 !important;
+    background: rgba(0, 0, 0, 0.06);
+}
+
+.tree-branch-handle:active {
+    cursor: grabbing;
+}
+
+.tree-branch-handle-icon {
+    font-size: 14px;
+    color: var(--color-text-muted);
+    line-height: 1;
+    letter-spacing: -1px;
+}
+
+/* ★ 拖拽中样式 */
+.tree-branch-wrapper.dragging {
+    opacity: 0.4 !important;
+    box-shadow: none !important;
+}
+
+/* ★ 放置目标指示器 */
+.tree-branch-wrapper.drop-target.drop-before {
+    box-shadow: 0 -3px 0 0 var(--color-primary), 0 2px 12px rgba(0, 0, 0, 0.06) !important;
+}
+
+.tree-branch-wrapper.drop-target.drop-after {
+    box-shadow: 0 3px 0 0 var(--color-primary), 0 2px 12px rgba(0, 0, 0, 0.06) !important;
+}
+
 /* 单个分支：父节点 + 子节点横排 */
 .tree-branch {
     display: flex;

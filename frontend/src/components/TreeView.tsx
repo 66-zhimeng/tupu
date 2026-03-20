@@ -7,8 +7,9 @@
  * - all: 全部层级递归展开
  * 支持 Ctrl+滚轮缩放 + 鼠标拖拽平移画布
  * 每个顶层任务分支使用不同的背景色区分
+ * 顶层分支支持拖拽排序
  */
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { useGraphStore } from '../stores/graphStore';
 import { getAssigneeColor, isAssigned } from '../utils/assigneeColors';
 import type { GraphNode } from '../services/api';
@@ -56,6 +57,14 @@ export default function TreeView() {
     const [pan, setPan] = useState({ x: 0, y: 0 });
     const isPanningRef = useRef(false);
     const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
+
+    // ★ 分支排序 — 存储用户自定义的顶层分支 ID 顺序
+    const [customOrder, setCustomOrder] = useState<string[]>([]);
+
+    // ★ 拖拽状态
+    const [dragId, setDragId] = useState<string | null>(null);
+    const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+    const [dropPosition, setDropPosition] = useState<'before' | 'after'>('before');
 
     const handleMouseDown = useCallback((e: React.MouseEvent) => {
         if (e.button === 0 || e.button === 1) {
@@ -107,6 +116,113 @@ export default function TreeView() {
     const tree = mode === 'current'
         ? buildTree(currentParentId)
         : buildTree(null);
+
+    // ★ 根据自定义排序调整顶层分支顺序
+    const orderedTree = useMemo(() => {
+        if (customOrder.length === 0) return tree;
+
+        const ordered: TreeNodeData[] = [];
+        const remaining = [...tree];
+
+        // 按自定义顺序排列已知 id
+        for (const id of customOrder) {
+            const idx = remaining.findIndex(item => item.node.id === id);
+            if (idx !== -1) {
+                ordered.push(remaining.splice(idx, 1)[0]);
+            }
+        }
+
+        // 追加不在自定义顺序中的新分支
+        ordered.push(...remaining);
+        return ordered;
+    }, [tree, customOrder]);
+
+    // ★ 拖拽排序处理
+    const handleDragStart = useCallback((e: React.DragEvent, nodeId: string) => {
+        e.stopPropagation();
+        setDragId(nodeId);
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', nodeId);
+        // 使拖拽预览半透明
+        if (e.currentTarget instanceof HTMLElement) {
+            e.currentTarget.style.opacity = '0.5';
+        }
+    }, []);
+
+    const handleDragEnd = useCallback((e: React.DragEvent) => {
+        e.stopPropagation();
+        setDragId(null);
+        setDropTargetId(null);
+        if (e.currentTarget instanceof HTMLElement) {
+            e.currentTarget.style.opacity = '1';
+        }
+    }, []);
+
+    const handleDragOver = useCallback((e: React.DragEvent, nodeId: string) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!dragId || dragId === nodeId) return;
+
+        e.dataTransfer.dropEffect = 'move';
+
+        // 计算放置位置：上半部分 = before，下半部分 = after
+        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        const pos = e.clientY < midY ? 'before' : 'after';
+
+        setDropTargetId(nodeId);
+        setDropPosition(pos);
+    }, [dragId]);
+
+    const handleDragLeave = useCallback((e: React.DragEvent) => {
+        e.stopPropagation();
+        // 只在真正离开元素（而非进入子元素）时清除
+        const related = e.relatedTarget as HTMLElement | null;
+        if (!related || !(e.currentTarget as HTMLElement).contains(related)) {
+            setDropTargetId(null);
+        }
+    }, []);
+
+    const handleDrop = useCallback((e: React.DragEvent, targetId: string) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (!dragId || dragId === targetId) {
+            setDragId(null);
+            setDropTargetId(null);
+            return;
+        }
+
+        // 计算放置位置
+        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        const pos = e.clientY < midY ? 'before' : 'after';
+
+        // 构建新顺序
+        const currentIds = orderedTree.map(item => item.node.id);
+        const fromIdx = currentIds.indexOf(dragId);
+        const toIdx = currentIds.indexOf(targetId);
+
+        if (fromIdx === -1 || toIdx === -1) {
+            setDragId(null);
+            setDropTargetId(null);
+            return;
+        }
+
+        // 从当前位置移除
+        const newOrder = [...currentIds];
+        newOrder.splice(fromIdx, 1);
+
+        // 计算新的插入位置
+        let insertIdx = newOrder.indexOf(targetId);
+        if (pos === 'after') insertIdx += 1;
+
+        newOrder.splice(insertIdx, 0, dragId);
+        setCustomOrder(newOrder);
+
+        setDragId(null);
+        setDropTargetId(null);
+    }, [dragId, orderedTree]);
 
     // 渲染单个节点
     function renderNode(item: TreeNodeData, depth: number): React.ReactNode {
@@ -172,22 +288,34 @@ export default function TreeView() {
         );
     }
 
-    // ★ 渲染顶层分支（带背景色包裹）
+    // ★ 渲染顶层分支（带背景色包裹 + 拖拽）
     function renderTopBranch(item: TreeNodeData, index: number): React.ReactNode {
         const bgColor = BRANCH_COLORS[index % BRANCH_COLORS.length];
         const borderColor = BRANCH_BORDER_COLORS[index % BRANCH_BORDER_COLORS.length];
+        const isDragging = dragId === item.node.id;
+        const isDropTarget = dropTargetId === item.node.id;
 
         return (
             <div
                 key={item.node.id}
-                className="tree-branch-wrapper"
+                className={`tree-branch-wrapper ${isDragging ? 'dragging' : ''} ${isDropTarget ? `drop-target drop-${dropPosition}` : ''}`}
                 style={{
                     background: bgColor,
                     border: `1px solid ${borderColor}`,
                     borderRadius: 12,
                     padding: '16px 20px',
                 }}
+                draggable
+                onDragStart={(e) => handleDragStart(e, item.node.id)}
+                onDragEnd={handleDragEnd}
+                onDragOver={(e) => handleDragOver(e, item.node.id)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, item.node.id)}
             >
+                {/* 拖拽手柄 */}
+                <div className="tree-branch-handle" title="拖动排序">
+                    <span className="tree-branch-handle-icon">⠿</span>
+                </div>
                 {renderNode(item, 0)}
             </div>
         );
@@ -225,7 +353,7 @@ export default function TreeView() {
                             重置
                         </button>
                     )}
-                    <span className="tree-count">{countNodes(tree)} 个节点</span>
+                    <span className="tree-count">{countNodes(orderedTree)} 个节点</span>
                 </div>
             </div>
 
@@ -239,7 +367,7 @@ export default function TreeView() {
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseUp}
             >
-                {tree.length === 0 ? (
+                {orderedTree.length === 0 ? (
                     <div className="tree-empty">此层级暂无任务</div>
                 ) : (
                     <div
@@ -249,14 +377,14 @@ export default function TreeView() {
                             transformOrigin: 'top left',
                         }}
                     >
-                        {tree.map((item, idx) => renderTopBranch(item, idx))}
+                        {orderedTree.map((item, idx) => renderTopBranch(item, idx))}
                     </div>
                 )}
             </div>
 
             {/* 缩放操作提示 */}
             {scale === 1 && pan.x === 0 && pan.y === 0 && (
-                <div className="tree-zoom-hint">Ctrl + 滚轮缩放 · 拖拽平移画布</div>
+                <div className="tree-zoom-hint">Ctrl + 滚轮缩放 · 拖拽平移画布 · 拖动⠿手柄排序分支</div>
             )}
         </div>
     );
