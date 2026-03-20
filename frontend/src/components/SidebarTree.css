@@ -88,7 +88,7 @@
 }
 
 /* ===== 树节点 ===== */
-.tree-node {
+.sb-tree-node {
     display: flex;
     align-items: center;
     gap: 4px;
@@ -102,28 +102,28 @@
     line-height: 1.35;
 }
 
-.tree-node:hover {
+.sb-tree-node:hover {
     background: rgba(0, 0, 0, 0.03);
     color: var(--color-text);
 }
 
-.tree-node.active {
+.sb-tree-node.active {
     background: var(--color-primary-light);
     color: var(--color-primary);
     border-left-color: var(--color-primary);
     font-weight: 600;
 }
 
-.tree-node.completed {
+.sb-tree-node.completed {
     opacity: 0.65;
 }
 
-.tree-node.cancelled {
+.sb-tree-node.cancelled {
     opacity: 0.4;
     text-decoration: line-through;
 }
 
-.tree-root {
+.sb-tree-root {
     padding: 8px 10px;
     font-weight: 600;
     font-size: 13px;
@@ -131,7 +131,7 @@
 }
 
 /* 展开/折叠箭头 */
-.tree-node-toggle {
+.sb-tree-node-toggle {
     flex-shrink: 0;
     width: 16px;
     height: 16px;
@@ -144,17 +144,17 @@
     transition: all 0.15s ease;
 }
 
-.tree-node-toggle:hover {
+.sb-tree-node-toggle:hover {
     color: var(--color-primary);
     background: var(--color-primary-light);
 }
 
-.tree-node-toggle-spacer {
+.sb-tree-node-toggle-spacer {
     visibility: hidden;
 }
 
 /* 图标 */
-.tree-node-icon {
+.sb-tree-node-icon {
     font-size: 13px;
     opacity: 0.6;
     flex-shrink: 0;
@@ -162,12 +162,12 @@
     text-align: center;
 }
 
-.tree-node.active .tree-node-icon {
+.sb-tree-node.active .sb-tree-node-icon {
     opacity: 1;
 }
 
 /* 标签 */
-.tree-node-label {
+.sb-tree-node-label {
     flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -176,7 +176,7 @@
 }
 
 /* 子任务数 */
-.tree-node-count {
+.sb-tree-node-count {
     font-size: 10px;
     font-family: var(--font-mono);
     color: var(--color-text-muted);
@@ -187,13 +187,13 @@
     line-height: 18px;
 }
 
-.tree-node.active .tree-node-count {
+.sb-tree-node.active .sb-tree-node-count {
     background: rgba(59, 130, 246, 0.15);
     color: var(--color-primary);
 }
 
 /* 进度百分比 */
-.tree-node-pct {
+.sb-tree-node-pct {
     font-size: 10px;
     font-family: var(--font-mono);
     color: var(--color-text-muted);
@@ -201,7 +201,7 @@
 }
 
 /* 子节点容器 */
-.tree-children {
+.sb-tree-children {
     /* no extra styling needed, indentation is inline */
 }
 
@@ -212,15 +212,15 @@
 }
 
 .sidebar-tree.collapsed .sidebar-title,
-.sidebar-tree.collapsed .tree-node-label,
-.sidebar-tree.collapsed .tree-node-count,
-.sidebar-tree.collapsed .tree-node-pct,
-.sidebar-tree.collapsed .tree-node-toggle,
-.sidebar-tree.collapsed .tree-children {
+.sidebar-tree.collapsed .sb-tree-node-label,
+.sidebar-tree.collapsed .sb-tree-node-count,
+.sidebar-tree.collapsed .sb-tree-node-pct,
+.sidebar-tree.collapsed .sb-tree-node-toggle,
+.sidebar-tree.collapsed .sb-tree-children {
     display: none;
 }
 
-.sidebar-tree.collapsed .tree-node {
+.sidebar-tree.collapsed .sb-tree-node {
     justify-content: center;
     padding: 8px 0;
     border-left: none;

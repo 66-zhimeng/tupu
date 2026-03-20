@@ -85,6 +85,7 @@
 
 /* ★ 顶层分支包裹容器（背景色区分） */
 .tree-branch-wrapper {
+    display: inline-flex;
     transition: box-shadow var(--transition-fast);
 }
 

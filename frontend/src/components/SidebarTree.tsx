@@ -51,7 +51,7 @@ function TreeNode({
     return (
         <>
             <div
-                className={`tree-node ${isActive ? 'active' : ''} ${isCompleted ? 'completed' : ''} ${isCancelled ? 'cancelled' : ''}`}
+                className={`sb-tree-node ${isActive ? 'active' : ''} ${isCompleted ? 'completed' : ''} ${isCancelled ? 'cancelled' : ''}`}
                 style={{ paddingLeft: 8 + depth * 16 }}
                 onClick={() => onNavigate(node.id, hasChildren)}
                 title={`${node.title}${hasChildren ? ` (${children.length} 子任务)` : ''} — ${node.status}`}
@@ -59,17 +59,17 @@ function TreeNode({
                 {/* 展开/折叠按钮 */}
                 {hasChildren ? (
                     <span
-                        className="tree-node-toggle"
+                        className="sb-tree-node-toggle"
                         onClick={(e) => { e.stopPropagation(); toggleExpand(node.id); }}
                     >
                         {isExpanded ? <CaretDownOutlined /> : <CaretRightOutlined />}
                     </span>
                 ) : (
-                    <span className="tree-node-toggle tree-node-toggle-spacer" />
+                    <span className="sb-tree-node-toggle sb-tree-node-toggle-spacer" />
                 )}
 
                 {/* 图标 */}
-                <span className="tree-node-icon">
+                <span className="sb-tree-node-icon">
                     {isCompleted ? (
                         <CheckCircleFilled style={{ color: '#10B981' }} />
                     ) : hasChildren ? (
@@ -80,19 +80,19 @@ function TreeNode({
                 </span>
 
                 {/* 任务名 */}
-                <span className="tree-node-label">{node.title}</span>
+                <span className="sb-tree-node-label">{node.title}</span>
 
                 {/* 进度 / 子任务数 */}
                 {hasChildren ? (
-                    <span className="tree-node-count">{children.length}</span>
+                    <span className="sb-tree-node-count">{children.length}</span>
                 ) : progressPct > 0 && progressPct < 100 ? (
-                    <span className="tree-node-pct">{Math.round(progressPct)}%</span>
+                    <span className="sb-tree-node-pct">{Math.round(progressPct)}%</span>
                 ) : null}
             </div>
 
             {/* 递归子节点 */}
             {hasChildren && isExpanded && (
-                <div className="tree-children">
+                <div className="sb-tree-children">
                     {children.map(child => (
                         <TreeNode
                             key={child.id}
@@ -202,20 +202,20 @@ export default function SidebarTree() {
             <div className="sidebar-body">
                 {/* 全部任务（根节点） */}
                 <div
-                    className={`tree-node tree-root ${currentParentId === null ? 'active' : ''}`}
+                    className={`sb-tree-node sb-tree-root ${currentParentId === null ? 'active' : ''}`}
                     onClick={() => {
                         if (currentParentId !== null) {
                             useGraphStore.getState().goToLevel(0);
                         }
                     }}
                 >
-                    <span className="tree-node-icon"><HomeOutlined /></span>
-                    <span className="tree-node-label">全部任务</span>
-                    <span className="tree-node-count">{rootNodes.length}</span>
+                    <span className="sb-tree-node-icon"><HomeOutlined /></span>
+                    <span className="sb-tree-node-label">全部任务</span>
+                    <span className="sb-tree-node-count">{rootNodes.length}</span>
                 </div>
 
                 {/* 递归任务树 */}
-                <div className="tree-children">
+                <div className="sb-tree-children">
                     {rootNodes.map(node => (
                         <TreeNode
                             key={node.id}
