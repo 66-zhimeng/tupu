@@ -71,7 +71,7 @@
 /* 画布区域 */
 .tree-canvas {
     flex: 1;
-    overflow: hidden;
+    overflow: auto;
     padding: 24px;
     display: flex;
     justify-content: center;

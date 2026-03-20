@@ -59,12 +59,10 @@ export default function TreeView() {
     const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
 
     const handleMouseDown = useCallback((e: React.MouseEvent) => {
-        // 只有中键或左键 + 空白区域可以拖拽
-        if (e.button === 1 || (e.button === 0 && e.target === canvasRef.current)) {
-            e.preventDefault();
+        // 左键或中键均可拖拽（使用移动距离阈值区分点击与拖拽）
+        if (e.button === 0 || e.button === 1) {
             isPanningRef.current = true;
             panStartRef.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
-            if (canvasRef.current) canvasRef.current.style.cursor = 'grabbing';
         }
     }, [pan]);
 
@@ -72,7 +70,11 @@ export default function TreeView() {
         if (!isPanningRef.current) return;
         const dx = e.clientX - panStartRef.current.x;
         const dy = e.clientY - panStartRef.current.y;
-        setPan({ x: panStartRef.current.panX + dx, y: panStartRef.current.panY + dy });
+        // 5px 阈值：超过才开始平移（区分点击和拖拽）
+        if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+            if (canvasRef.current) canvasRef.current.style.cursor = 'grabbing';
+            setPan({ x: panStartRef.current.panX + dx, y: panStartRef.current.panY + dy });
+        }
     }, []);
 
     const handleMouseUp = useCallback(() => {
