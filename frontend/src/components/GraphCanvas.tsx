@@ -322,329 +322,366 @@ export default function GraphCanvas() {
 
   // 初始化 G6 — viewMode 切换时重建
   useEffect(() => {
-    if (!containerRef.current || viewMode !== 'graph') return;
-    // 先销毁旧实例（从 tree 切回时需要重建）
-    if (graphRef.current) {
-      try { graphRef.current.destroy(); } catch { /* ignore */ }
-      graphRef.current = null;
-    }
+    if (viewMode !== 'graph') return;
 
-    const graph = new Graph({
-      container: containerRef.current,
-      autoFit: 'view',
-      padding: [60, 60, 60, 60],
-      animation: true,
+    // ★ 使用 rAF 确保容器 DOM 完全挂载并有正确尺寸后再初始化 G6
+    // （从 tree 切回 graph 时，容器刚被条件渲染出来，需要等一帧）
+    let cancelled = false;
+    const rafId = requestAnimationFrame(() => {
+      if (cancelled || !containerRef.current) return;
 
-      behaviors: [
-        { type: 'drag-canvas', key: 'drag-canvas' },
-        'zoom-canvas',
-        {
-          type: 'hover-activate',
-          key: 'hover-highlight',
-          degree: 1,
-          state: 'highlight',
-        },
-      ],
+      // 检查容器是否已有可用尺寸
+      const { width, height } = containerRef.current.getBoundingClientRect();
+      if (width === 0 || height === 0) {
+        // 容器尚未获得尺寸，再延迟一帧
+        requestAnimationFrame(() => {
+          if (cancelled || !containerRef.current) return;
+          initGraph();
+        });
+        return;
+      }
+      initGraph();
+    });
 
-      plugins: [
-        {
-          type: 'grid-line',
-          key: 'grid',
-          size: 30,
-          stroke: '#E8E8E8',
-          lineWidth: 0.4,
-        },
-        {
-          type: 'minimap',
-          key: 'minimap',
-          size: [160, 100],
-          position: 'right-bottom',
-        },
-        {
-          type: 'tooltip',
-          key: 'pie-tooltip',
-          getContent: (_evt: any, items: any[]) => {
-            if (!items || items.length === 0) return '';
-            const item = items[0];
-            const data = item?.data;
-            if (!data) return '';
-            const slices = data.pieSlices as any[] | undefined;
-            if (slices && slices.length > 0) {
-              const done = slices.filter((s: any) => s.completed || s.status === '已完成').length;
-              let html = `<div style="font-family:'Space Grotesk',sans-serif;font-size:13px;min-width:160px">`;
-              html += `<div style="font-weight:700;margin-bottom:6px;font-size:14px">${data.title || data.label}</div>`;
-              html += `<div style="color:#666;margin-bottom:8px;font-family:'JetBrains Mono',monospace;font-size:12px">${done}/${slices.length} 完成</div>`;
-              for (const s of slices) {
-                const color = (s.completed || s.status === '已完成') ? '#10B981' : s.status === '已取消' ? '#CCC' : '#94A3B8';
-                html += `<div style="display:flex;align-items:center;gap:6px;padding:2px 0">`;
-                html += `<span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0"></span>`;
-                html += `<span>${s.title}</span>`;
+    function initGraph() {
+      if (!containerRef.current) return;
+
+      // 先销毁旧实例（从 tree 切回时需要重建）
+      if (graphRef.current) {
+        try { graphRef.current.destroy(); } catch { /* ignore */ }
+        graphRef.current = null;
+      }
+
+      const graph = new Graph({
+        container: containerRef.current!,
+        autoFit: 'view',
+        padding: [60, 60, 60, 60],
+        animation: true,
+
+        behaviors: [
+          { type: 'drag-canvas', key: 'drag-canvas' },
+          'zoom-canvas',
+          {
+            type: 'hover-activate',
+            key: 'hover-highlight',
+            degree: 1,
+            state: 'highlight',
+          },
+        ],
+
+        plugins: [
+          {
+            type: 'grid-line',
+            key: 'grid',
+            size: 30,
+            stroke: '#E8E8E8',
+            lineWidth: 0.4,
+          },
+          {
+            type: 'minimap',
+            key: 'minimap',
+            size: [160, 100],
+            position: 'right-bottom',
+          },
+          {
+            type: 'tooltip',
+            key: 'pie-tooltip',
+            getContent: (_evt: any, items: any[]) => {
+              if (!items || items.length === 0) return '';
+              const item = items[0];
+              const data = item?.data;
+              if (!data) return '';
+              const slices = data.pieSlices as any[] | undefined;
+              if (slices && slices.length > 0) {
+                const done = slices.filter((s: any) => s.completed || s.status === '已完成').length;
+                let html = `<div style="font-family:'Space Grotesk',sans-serif;font-size:13px;min-width:160px">`;
+                html += `<div style="font-weight:700;margin-bottom:6px;font-size:14px">${data.title || data.label}</div>`;
+                html += `<div style="color:#666;margin-bottom:8px;font-family:'JetBrains Mono',monospace;font-size:12px">${done}/${slices.length} 完成</div>`;
+                for (const s of slices) {
+                  const color = (s.completed || s.status === '已完成') ? '#10B981' : s.status === '已取消' ? '#CCC' : '#94A3B8';
+                  html += `<div style="display:flex;align-items:center;gap:6px;padding:2px 0">`;
+                  html += `<span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0"></span>`;
+                  html += `<span>${s.title}</span>`;
+                  html += `</div>`;
+                }
                 html += `</div>`;
+                return html;
               }
-              html += `</div>`;
-              return html;
-            }
-            return `<div style="font-family:'Space Grotesk',sans-serif;font-size:13px">
+              return `<div style="font-family:'Space Grotesk',sans-serif;font-size:13px">
               <div style="font-weight:700">${data.title || data.label}</div>
               <div style="color:#666;font-size:12px">${data.status} · ${(data.computed_progress || 0).toFixed(0)}%</div>
             </div>`;
+            },
           },
-        },
-      ],
+        ],
 
-      // 节点样式
-      node: {
-        type: 'circle',
-        style: {
-          size: (d: any) => (d.data?.nodeRadius || 55) * 2,
-          fill: (d: any) => {
-            // ★ 已完成 → 实心绿
-            if (d.data?.status === '已完成') return '#10B981';
-            if (d.data?.status === '已取消') return '#D4D4D8';
-            if (d.data?.hasChildren) return d.data?.progressColor || '#94A3B8';
-            return getAssigneeColor(d.data?.assignee);
-          },
-          fillOpacity: (d: any) => {
-            if (d.data?.status === '已完成') return 0.85;
-            if (d.data?.status === '已取消') return 0.25;
-            return d.data?.hasChildren ? 0.05 : 0.15;
-          },
-          stroke: (d: any) => {
-            if (d.data?.status === '已完成') return '#059669';
-            if (d.data?.status === '已取消') return '#A1A1AA';
-            if (d.data?.due_date && d.data?.status === '未完成') {
-              if (new Date() > new Date(d.data.due_date)) return '#EF4444';
-            }
-            if (!d.data?.hasChildren) {
+        // 节点样式
+        node: {
+          type: 'circle',
+          style: {
+            size: (d: any) => (d.data?.nodeRadius || 55) * 2,
+            fill: (d: any) => {
+              // ★ 已完成 → 实心绿
+              if (d.data?.status === '已完成') return '#10B981';
+              if (d.data?.status === '已取消') return '#D4D4D8';
+              if (d.data?.hasChildren) return d.data?.progressColor || '#94A3B8';
               return getAssigneeColor(d.data?.assignee);
-            }
-            return d.data?.progressColor || '#E8E8E8';
+            },
+            fillOpacity: (d: any) => {
+              if (d.data?.status === '已完成') return 0.85;
+              if (d.data?.status === '已取消') return 0.25;
+              return d.data?.hasChildren ? 0.05 : 0.15;
+            },
+            stroke: (d: any) => {
+              if (d.data?.status === '已完成') return '#059669';
+              if (d.data?.status === '已取消') return '#A1A1AA';
+              if (d.data?.due_date && d.data?.status === '未完成') {
+                if (new Date() > new Date(d.data.due_date)) return '#EF4444';
+              }
+              if (!d.data?.hasChildren) {
+                return getAssigneeColor(d.data?.assignee);
+              }
+              return d.data?.progressColor || '#E8E8E8';
+            },
+            lineWidth: (d: any) => {
+              if (d.data?.status === '已完成') return 2.5;
+              return !d.data?.hasChildren && !isAssigned(d.data?.assignee) ? 2 : 2;
+            },
+            lineDash: (d: any) => !d.data?.hasChildren && !isAssigned(d.data?.assignee) ? [4, 3] : undefined,
+            opacity: (d: any) => (d.data?.status === '已取消' ? 0.4 : 1),
+            pointerEvents: 'auto',
+            shadowColor: (d: any) => (getAssigneeColor(d.data?.assignee) || '#94A3B8') + '18',
+            shadowBlur: 8,
+            shadowOffsetY: 2,
+
+            // ★ SVG 扇形饼图嵌入节点（零残影）
+            iconSrc: (d: any) => d.data?.pieSvg || undefined,
+            iconWidth: (d: any) => d.data?.pieSvg ? (d.data?.nodeRadius || 55) * 2 - 4 : 0,
+            iconHeight: (d: any) => d.data?.pieSvg ? (d.data?.nodeRadius || 55) * 2 - 4 : 0,
+
+            labelText: (d: any) => d.data?.label || '',
+            labelFill: (d: any) => d.data?.status === '已完成' ? '#065F46' : '#09090B',
+            labelFontSize: (d: any) => {
+              if (d.data?.hasChildren) return 14;
+              return 13;
+            },
+            labelFontWeight: 600,
+            labelPlacement: 'bottom',
+            labelWordWrap: true,
+            labelMaxWidth: 150,
+            labelMaxLines: 2,
+            labelFontFamily: "'Space Grotesk', 'Inter', sans-serif",
+            labelBackground: true,
+            labelBackgroundFill: 'rgba(255,255,255,0.95)',
+            labelBackgroundStroke: '#E4E4E7',
+            labelBackgroundLineWidth: 1,
+            labelBackgroundRadius: 6,
+            labelPadding: [4, 10, 4, 10],
+            labelOffsetY: 10,
+
+            port: true,
+            ports: Array.from({ length: 12 }, (_, i) => {
+              const angle = (i / 12) * Math.PI * 2;
+              return {
+                key: `p${i}`,
+                placement: [0.5 + 0.5 * Math.cos(angle), 0.5 + 0.5 * Math.sin(angle)] as [number, number],
+                r: 0,
+              };
+            }),
           },
-          lineWidth: (d: any) => {
-            if (d.data?.status === '已完成') return 2.5;
-            return !d.data?.hasChildren && !isAssigned(d.data?.assignee) ? 2 : 2;
+          state: {
+            highlight: { stroke: '#3B82F6', lineWidth: 3, shadowColor: 'rgba(59,130,246,0.25)', shadowBlur: 16 },
+            dim: { opacity: 0.15 },
           },
-          lineDash: (d: any) => !d.data?.hasChildren && !isAssigned(d.data?.assignee) ? [4, 3] : undefined,
-          opacity: (d: any) => (d.data?.status === '已取消' ? 0.4 : 1),
-          pointerEvents: 'auto',
-          shadowColor: (d: any) => (getAssigneeColor(d.data?.assignee) || '#94A3B8') + '18',
-          shadowBlur: 8,
-          shadowOffsetY: 2,
+        },
 
-          // ★ SVG 扇形饼图嵌入节点（零残影）
-          iconSrc: (d: any) => d.data?.pieSvg || undefined,
-          iconWidth: (d: any) => d.data?.pieSvg ? (d.data?.nodeRadius || 55) * 2 - 4 : 0,
-          iconHeight: (d: any) => d.data?.pieSvg ? (d.data?.nodeRadius || 55) * 2 - 4 : 0,
-
-          labelText: (d: any) => d.data?.label || '',
-          labelFill: (d: any) => d.data?.status === '已完成' ? '#065F46' : '#09090B',
-          labelFontSize: (d: any) => {
-            if (d.data?.hasChildren) return 14;
-            return 13;
+        // 边样式（加粗 + 大箭头）
+        edge: {
+          type: 'cubic',
+          style: {
+            stroke: (d: any) => d.data?.edgeType === 'iterative' ? '#F59E0B' : '#888888',
+            lineWidth: (d: any) => d.data?.edgeType === 'iterative' ? 3.5 : 3,
+            lineDash: (d: any) => d.data?.edgeType === 'iterative' ? [8, 4] : undefined,
+            opacity: 0.85,
+            endArrow: true,
+            endArrowSize: 12,
+            endArrowFill: (d: any) => d.data?.edgeType === 'iterative' ? '#F59E0B' : '#888888',
+            labelText: (d: any) => {
+              if (d.data?.edgeType === 'iterative' && d.data?.iterationCount > 0) return `×${d.data.iterationCount}`;
+              return '';
+            },
+            labelFill: '#F59E0B',
+            labelFontSize: 11,
+            labelFontWeight: 600,
+            labelFontFamily: "'JetBrains Mono', monospace",
+            labelBackground: true,
+            labelBackgroundFill: '#FFFBEB',
+            labelBackgroundRadius: 4,
+            labelBackgroundPadding: [2, 6],
           },
-          labelFontWeight: 600,
-          labelPlacement: 'bottom',
-          labelWordWrap: true,
-          labelMaxWidth: 150,
-          labelMaxLines: 2,
-          labelFontFamily: "'Space Grotesk', 'Inter', sans-serif",
-          labelBackground: true,
-          labelBackgroundFill: 'rgba(255,255,255,0.95)',
-          labelBackgroundStroke: '#E4E4E7',
-          labelBackgroundLineWidth: 1,
-          labelBackgroundRadius: 6,
-          labelPadding: [4, 10, 4, 10],
-          labelOffsetY: 10,
-
-          port: true,
-          ports: Array.from({ length: 12 }, (_, i) => {
-            const angle = (i / 12) * Math.PI * 2;
-            return {
-              key: `p${i}`,
-              placement: [0.5 + 0.5 * Math.cos(angle), 0.5 + 0.5 * Math.sin(angle)] as [number, number],
-              r: 0,
-            };
-          }),
-        },
-        state: {
-          highlight: { stroke: '#3B82F6', lineWidth: 3, shadowColor: 'rgba(59,130,246,0.25)', shadowBlur: 16 },
-          dim: { opacity: 0.15 },
-        },
-      },
-
-      // 边样式（加粗 + 大箭头）
-      edge: {
-        type: 'cubic',
-        style: {
-          stroke: (d: any) => d.data?.edgeType === 'iterative' ? '#F59E0B' : '#888888',
-          lineWidth: (d: any) => d.data?.edgeType === 'iterative' ? 3.5 : 3,
-          lineDash: (d: any) => d.data?.edgeType === 'iterative' ? [8, 4] : undefined,
-          opacity: 0.85,
-          endArrow: true,
-          endArrowSize: 12,
-          endArrowFill: (d: any) => d.data?.edgeType === 'iterative' ? '#F59E0B' : '#888888',
-          labelText: (d: any) => {
-            if (d.data?.edgeType === 'iterative' && d.data?.iterationCount > 0) return `×${d.data.iterationCount}`;
-            return '';
+          state: {
+            highlight: { stroke: '#3B82F6', lineWidth: 2, opacity: 1 },
+            dim: { opacity: 0.1 },
           },
-          labelFill: '#F59E0B',
-          labelFontSize: 11,
-          labelFontWeight: 600,
-          labelFontFamily: "'JetBrains Mono', monospace",
-          labelBackground: true,
-          labelBackgroundFill: '#FFFBEB',
-          labelBackgroundRadius: 4,
-          labelBackgroundPadding: [2, 6],
         },
-        state: {
-          highlight: { stroke: '#3B82F6', lineWidth: 2, opacity: 1 },
-          dim: { opacity: 0.1 },
-        },
-      },
-    });
+      });
 
-    graphRef.current = graph;
-    setGraphInstance(graph);
+      graphRef.current = graph;
+      setGraphInstance(graph);
 
-    // ★ 辅助：查找节点
-    function findNodeAt(gx: number, gy: number): string | null {
-      const allNodes = graph.getNodeData();
-      if (!Array.isArray(allNodes)) return null;
-      let bestId: string | null = null;
-      let bestRadius = Infinity;
-      for (const n of allNodes) {
-        let nx = 0, ny = 0;
-        try { const pos = graph.getElementPosition(n.id as string); nx = pos[0]; ny = pos[1]; }
-        catch { nx = (n.style as any)?.x || 0; ny = (n.style as any)?.y || 0; }
-        const nr = Number(n.data?.nodeRadius) || 55;
-        const dist = Math.sqrt((gx - nx) ** 2 + (gy - ny) ** 2);
-        if (dist <= nr && nr < bestRadius) { bestRadius = nr; bestId = n.id as string; }
+      // ★ 辅助：查找节点
+      function findNodeAt(gx: number, gy: number): string | null {
+        const allNodes = graph.getNodeData();
+        if (!Array.isArray(allNodes)) return null;
+        let bestId: string | null = null;
+        let bestRadius = Infinity;
+        for (const n of allNodes) {
+          let nx = 0, ny = 0;
+          try { const pos = graph.getElementPosition(n.id as string); nx = pos[0]; ny = pos[1]; }
+          catch { nx = (n.style as any)?.x || 0; ny = (n.style as any)?.y || 0; }
+          const nr = Number(n.data?.nodeRadius) || 55;
+          const dist = Math.sqrt((gx - nx) ** 2 + (gy - ny) ** 2);
+          if (dist <= nr && nr < bestRadius) { bestRadius = nr; bestId = n.id as string; }
+        }
+        return bestId;
       }
-      return bestId;
-    }
 
-    let _connectSource: string | null = null;
+      let _connectSource: string | null = null;
 
-    // 单击 → 编辑面板（延迟区分双击）
-    graph.on('node:click', (evt: any) => {
-      const store = useGraphStore.getState();
-      if (store.enableConnect) {
-        const gx = evt.canvas?.x ?? 0, gy = evt.canvas?.y ?? 0;
-        const clicked = findNodeAt(gx, gy) || (evt.target?.id as string);
-        if (!clicked) return;
-        if (!_connectSource) { _connectSource = clicked; message.info('请点击目标节点完成连线'); }
-        else { if (clicked !== _connectSource) { addDependency({ source_task_id: _connectSource, target_task_id: clicked }); message.success('连线已创建'); } _connectSource = null; }
-        return;
-      }
-      if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
-      clickTimerRef.current = setTimeout(() => {
+      // 单击 → 编辑面板（延迟区分双击）
+      graph.on('node:click', (evt: any) => {
+        const store = useGraphStore.getState();
+        if (store.enableConnect) {
+          const gx = evt.canvas?.x ?? 0, gy = evt.canvas?.y ?? 0;
+          const clicked = findNodeAt(gx, gy) || (evt.target?.id as string);
+          if (!clicked) return;
+          if (!_connectSource) { _connectSource = clicked; message.info('请点击目标节点完成连线'); }
+          else { if (clicked !== _connectSource) { addDependency({ source_task_id: _connectSource, target_task_id: clicked }); message.success('连线已创建'); } _connectSource = null; }
+          return;
+        }
+        if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+        clickTimerRef.current = setTimeout(() => {
+          const gx = evt.canvas?.x ?? 0, gy = evt.canvas?.y ?? 0;
+          const target = findNodeAt(gx, gy);
+          if (target) selectNode(target, 'task');
+          clickTimerRef.current = null;
+        }, 280);
+      });
+
+      // 双击 → 钻入
+      graph.on('node:dblclick', (evt: any) => {
+        if (clickTimerRef.current) { clearTimeout(clickTimerRef.current); clickTimerRef.current = null; }
         const gx = evt.canvas?.x ?? 0, gy = evt.canvas?.y ?? 0;
         const target = findNodeAt(gx, gy);
-        if (target) selectNode(target, 'task');
-        clickTimerRef.current = null;
-      }, 280);
-    });
-
-    // 双击 → 钻入
-    graph.on('node:dblclick', (evt: any) => {
-      if (clickTimerRef.current) { clearTimeout(clickTimerRef.current); clickTimerRef.current = null; }
-      const gx = evt.canvas?.x ?? 0, gy = evt.canvas?.y ?? 0;
-      const target = findNodeAt(gx, gy);
-      if (target) {
-        const store = useGraphStore.getState();
-        const children = store.graphData?.nodes.filter(n => n.parent_id === target) || [];
-        if (children.length > 0) drillDown(target);
-        else selectNode(target, 'task');
-      }
-    });
-
-    graph.on('canvas:click', () => { hideContextMenu(); _connectSource = null; });
-    graph.on('node:contextmenu', (evt: any) => {
-      const e = evt.originalEvent || evt;
-      e?.preventDefault?.(); e?.stopPropagation?.();
-      const target = findNodeAt(evt.canvas?.x ?? 0, evt.canvas?.y ?? 0);
-      if (target) showContextMenu(e?.clientX || 0, e?.clientY || 0, evt.canvas?.x ?? 0, evt.canvas?.y ?? 0, target, 'task');
-    });
-    graph.on('canvas:contextmenu', (evt: any) => {
-      const e = evt.originalEvent || evt;
-      e?.preventDefault?.(); e?.stopPropagation?.();
-      showContextMenu(e?.clientX || 0, e?.clientY || 0, evt.canvas?.x || 0, evt.canvas?.y || 0);
-    });
-
-    // 拖拽
-    let _dragTarget: string | null = null, _dragLastX = 0, _dragLastY = 0, _isDragging = false;
-    function getNodePos(nodeId: string): [number, number] {
-      try { const pos = graph.getElementPosition(nodeId); return [pos[0], pos[1]]; }
-      catch { const nd = graph.getNodeData(nodeId); return [(nd?.style as any)?.x || 0, (nd?.style as any)?.y || 0]; }
-    }
-    graph.on('node:pointerdown', (evt: any) => {
-      if ((evt.button ?? evt.originalEvent?.button ?? 0) !== 0) return;
-      if (useGraphStore.getState().enableConnect) return;
-      const target = findNodeAt(evt.canvas?.x ?? 0, evt.canvas?.y ?? 0);
-      if (target) { _dragTarget = target; _dragLastX = evt.canvas?.x ?? 0; _dragLastY = evt.canvas?.y ?? 0; _isDragging = false; graph.updateBehavior({ key: 'drag-canvas', enable: false }); }
-    });
-    function handleDragMove(gx: number, gy: number) {
-      if (!_dragTarget) return;
-      _isDragging = true;
-      const dx = gx - _dragLastX, dy = gy - _dragLastY;
-      _dragLastX = gx; _dragLastY = gy;
-      if (Math.abs(dx) < 0.001 && Math.abs(dy) < 0.001) return;
-      graph.translateElementBy(_dragTarget, [dx, dy], false);
-
-      // ★ 碰撞检测：推开重叠节点
-      const [myX, myY] = getNodePos(_dragTarget);
-      const myR = Number(graph.getNodeData(_dragTarget)?.data?.nodeRadius) || 55;
-      const allNodes = graph.getNodeData();
-      if (Array.isArray(allNodes)) {
-        for (const n of allNodes) {
-          const nid = n.id as string;
-          if (nid === _dragTarget) continue;
-          const [nx, ny] = getNodePos(nid);
-          const nR = Number(n.data?.nodeRadius) || 55;
-          const minDist = myR + nR + 10; // 10px 间距
-          const distX = nx - myX, distY = ny - myY;
-          const dist = Math.sqrt(distX * distX + distY * distY);
-          if (dist < minDist && dist > 0.1) {
-            const overlap = minDist - dist;
-            const pushX = (distX / dist) * overlap;
-            const pushY = (distY / dist) * overlap;
-            graph.translateElementBy(nid, [pushX, pushY], false);
-          }
+        if (target) {
+          const store = useGraphStore.getState();
+          const children = store.graphData?.nodes.filter(n => n.parent_id === target) || [];
+          if (children.length > 0) drillDown(target);
+          else selectNode(target, 'task');
         }
+      });
+
+      graph.on('canvas:click', () => { hideContextMenu(); _connectSource = null; });
+      graph.on('node:contextmenu', (evt: any) => {
+        const e = evt.originalEvent || evt;
+        e?.preventDefault?.(); e?.stopPropagation?.();
+        const target = findNodeAt(evt.canvas?.x ?? 0, evt.canvas?.y ?? 0);
+        if (target) showContextMenu(e?.clientX || 0, e?.clientY || 0, evt.canvas?.x ?? 0, evt.canvas?.y ?? 0, target, 'task');
+      });
+      graph.on('canvas:contextmenu', (evt: any) => {
+        const e = evt.originalEvent || evt;
+        e?.preventDefault?.(); e?.stopPropagation?.();
+        showContextMenu(e?.clientX || 0, e?.clientY || 0, evt.canvas?.x || 0, evt.canvas?.y || 0);
+      });
+
+      // 拖拽
+      let _dragTarget: string | null = null, _dragLastX = 0, _dragLastY = 0, _isDragging = false;
+      function getNodePos(nodeId: string): [number, number] {
+        try { const pos = graph.getElementPosition(nodeId); return [pos[0], pos[1]]; }
+        catch { const nd = graph.getNodeData(nodeId); return [(nd?.style as any)?.x || 0, (nd?.style as any)?.y || 0]; }
       }
-    }
-    graph.on('node:pointermove', (evt: any) => handleDragMove(evt.canvas?.x ?? 0, evt.canvas?.y ?? 0));
-    graph.on('canvas:pointermove', (evt: any) => handleDragMove(evt.canvas?.x ?? 0, evt.canvas?.y ?? 0));
-    const endDrag = () => {
-      if (_dragTarget && _isDragging) {
-        const [fx, fy] = getNodePos(_dragTarget);
-        console.log('[GraphCanvas] 保存位置:', _dragTarget, fx, fy);
-        savePosition(_dragTarget, fx, fy);
-        // 同时保存被碰撞推开的节点位置
+      graph.on('node:pointerdown', (evt: any) => {
+        if ((evt.button ?? evt.originalEvent?.button ?? 0) !== 0) return;
+        if (useGraphStore.getState().enableConnect) return;
+        const target = findNodeAt(evt.canvas?.x ?? 0, evt.canvas?.y ?? 0);
+        if (target) { _dragTarget = target; _dragLastX = evt.canvas?.x ?? 0; _dragLastY = evt.canvas?.y ?? 0; _isDragging = false; graph.updateBehavior({ key: 'drag-canvas', enable: false }); }
+      });
+      function handleDragMove(gx: number, gy: number) {
+        if (!_dragTarget) return;
+        _isDragging = true;
+        const dx = gx - _dragLastX, dy = gy - _dragLastY;
+        _dragLastX = gx; _dragLastY = gy;
+        if (Math.abs(dx) < 0.001 && Math.abs(dy) < 0.001) return;
+        graph.translateElementBy(_dragTarget, [dx, dy], false);
+
+        // ★ 碰撞检测：推开重叠节点
+        const [myX, myY] = getNodePos(_dragTarget);
+        const myR = Number(graph.getNodeData(_dragTarget)?.data?.nodeRadius) || 55;
         const allNodes = graph.getNodeData();
         if (Array.isArray(allNodes)) {
           for (const n of allNodes) {
             const nid = n.id as string;
             if (nid === _dragTarget) continue;
             const [nx, ny] = getNodePos(nid);
-            const ox = Number(n.data?.position_x);
-            const oy = Number(n.data?.position_y);
-            if (isNaN(ox) || isNaN(oy) || Math.abs(nx - ox) > 1 || Math.abs(ny - oy) > 1) {
-              savePosition(nid, nx, ny);
+            const nR = Number(n.data?.nodeRadius) || 55;
+            const minDist = myR + nR + 10; // 10px 间距
+            const distX = nx - myX, distY = ny - myY;
+            const dist = Math.sqrt(distX * distX + distY * distY);
+            if (dist < minDist && dist > 0.1) {
+              const overlap = minDist - dist;
+              const pushX = (distX / dist) * overlap;
+              const pushY = (distY / dist) * overlap;
+              graph.translateElementBy(nid, [pushX, pushY], false);
             }
           }
         }
       }
-      if (_dragTarget) graph.updateBehavior({ key: 'drag-canvas', enable: true });
-      _dragTarget = null; _isDragging = false;
-    };
-    graph.on('node:pointerup', endDrag);
-    graph.on('canvas:pointerup', endDrag);
+      graph.on('node:pointermove', (evt: any) => handleDragMove(evt.canvas?.x ?? 0, evt.canvas?.y ?? 0));
+      graph.on('canvas:pointermove', (evt: any) => handleDragMove(evt.canvas?.x ?? 0, evt.canvas?.y ?? 0));
+      const endDrag = () => {
+        if (_dragTarget && _isDragging) {
+          const [fx, fy] = getNodePos(_dragTarget);
+          console.log('[GraphCanvas] 保存位置:', _dragTarget, fx, fy);
+          savePosition(_dragTarget, fx, fy);
+          // 同时保存被碰撞推开的节点位置
+          const allNodes = graph.getNodeData();
+          if (Array.isArray(allNodes)) {
+            for (const n of allNodes) {
+              const nid = n.id as string;
+              if (nid === _dragTarget) continue;
+              const [nx, ny] = getNodePos(nid);
+              const ox = Number(n.data?.position_x);
+              const oy = Number(n.data?.position_y);
+              if (isNaN(ox) || isNaN(oy) || Math.abs(nx - ox) > 1 || Math.abs(ny - oy) > 1) {
+                savePosition(nid, nx, ny);
+              }
+            }
+          }
+        }
+        if (_dragTarget) graph.updateBehavior({ key: 'drag-canvas', enable: true });
+        _dragTarget = null; _isDragging = false;
+      };
+      graph.on('node:pointerup', endDrag);
+      graph.on('canvas:pointerup', endDrag);
+
+      // ★ 初始化后立即加载数据（从 tree 切回时，数据 useEffect 不会重触发）
+      const { graphData: gd, currentParentId: cpId, positionCache: pc } = useGraphStore.getState();
+      if (gd) {
+        const data = buildG6Data(gd, cpId, pc, graph);
+        graph.setData(data);
+        graph.draw().then(() => {
+          graph.fitView();
+        });
+      }
+
+    } // end initGraph
 
     return () => {
+      cancelled = true;
+      cancelAnimationFrame(rafId);
       if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
       setGraphInstance(null);
-      try { graph.destroy(); } catch { /* ignore */ }
+      try { graphRef.current?.destroy(); } catch { /* ignore */ }
       graphRef.current = null;
     };
   }, [viewMode]); // eslint-disable-line react-hooks/exhaustive-deps
